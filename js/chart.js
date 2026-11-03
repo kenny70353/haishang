@@ -1,10 +1,11 @@
 // 《航海通商》海圖：東亞海域地形、航線、港口與各勢力船隻（含航行動畫）
-import { PORTS, ROUTES, TEAMS } from './data.js?v=20261103v';
+import { PORTS, ROUTES, TEAMS } from './data.js?v=20261103w';
+import { LAND_D as LAND_REAL } from './chart-land.js?v=20261103w';
 
 // ---------- 投影 ----------
 // 以臺灣海峽為中心的「魚眼」投影：海峽附近放大約 3 倍，長崎、馬尼拉等遠端維持在畫面內。
 const C = [120.3, 24.0];
-const MAG = 2.0, RAD = 16;
+const MAG = 1.5, RAD = 16;
 const X0 = 112, Y0 = 35.5, K = 5;
 export const W = 110, H = 130;
 function proj(lon, lat) {
@@ -67,13 +68,13 @@ const LAND = {
   yakushima: [[130.4, 30.3], [130.65, 30.4], [130.5, 30.5]],
   batanes: [[121.85, 20.4], [121.98, 20.5], [121.9, 20.58]],
 };
-const PORT_GEO = { 長崎: [129.82, 32.75], 雞籠: [121.74, 25.2], 月港: [118.05, 24.42], 澎湖: [119.57, 23.57], 大員: [120.12, 23.0], 馬尼拉: [120.97, 14.6] };
+const PORT_GEO = { 長崎: [129.86, 32.74], 雞籠: [121.74, 25.14], 月港: [117.86, 24.42], 澎湖: [119.56, 23.57], 大員: [120.15, 23.0], 馬尼拉: [120.97, 14.59] };
 // 船停泊時排列的方向（畫面角度，0 = 右、90 = 下），朝向開闊海面
 const PORT_SEA = { 長崎: 165, 雞籠: -60, 月港: 20, 澎湖: 150, 大員: 115, 馬尼拉: 175 };
 // 擠在畫面邊緣的港口改用固定停泊位置
 const PORT_SLOTS = { 長崎: [[-9, 4], [-23, 5], [-15, 15], [-29, 16], [-37, 7]] };
 // 標籤位置
-const PORT_LABEL = { 長崎: 'down', 雞籠: 'right', 月港: 'up', 澎湖: 'right', 大員: 'right', 馬尼拉: 'right' };
+const PORT_LABEL = { 長崎: 'down', 雞籠: 'right', 月港: 'up', 澎湖: 'left', 大員: 'right', 馬尼拉: 'right' };
 const WAY = {
   '長崎|雞籠': [[129.2, 32.3], [127.0, 30.0], [124.5, 27.5], [122.4, 25.7]],
   '雞籠|大員': [[121.4, 25.45], [120.6, 25.0], [120.0, 24.2], [119.85, 23.4]],
@@ -86,13 +87,13 @@ const WAY = {
   '月港|馬尼拉': [[118.4, 23.9], [118.4, 22.5], [118.5, 20.0], [118.9, 17.0], [119.3, 15.4], [120.0, 14.6], [120.4, 14.3], [120.65, 14.45]],
 };
 const LABELS = [
-  ['大明', 116.7, 27.4, 'land big'], ['臺灣', 121.0, 23.9, 'land'], ['呂宋', 121.1, 16.6, 'land'], ['日本', 131.0, 32.2, 'land'],
+  ['大明', 116.7, 27.4, 'land big'], ['臺灣', 121.0, 23.9, 'land'], ['呂宋', 121.1, 16.6, 'land'], ['日本', 132.4, 33.7, 'land sm'],
   ['琉球', 128.1, 27.3, 'land sm'], ['朝鮮', 127.5, 34.5, 'land sm'],
-  ['臺灣海峽', 117.6, 22.3, 'sea'], ['南海', 116.0, 17.0, 'sea big'], ['東海', 124.6, 29.2, 'sea'], ['太平洋', 127.6, 19.0, 'sea big'],
+  ['臺灣海峽', 117.6, 22.3, 'sea'], ['南海', 116.0, 17.0, 'sea big'], ['東海', 123.4, 27.4, 'sea'], ['太平洋', 127.6, 19.0, 'sea big'],
 ];
 
 // 預先計算：陸地路徑、港口座標、航線點列
-const LAND_D = Object.values(LAND).map(polyPath).join('');
+const LAND_D = LAND_REAL;
 // 山形（仿明代輿圖的青綠山頭）
 const MTN = [[118.7, 28.3, 1.0], [119.5, 29.3, .9], [116.4, 24.5, 1.1], [117.8, 25.4, .9], [115.2, 23.6, 1.0], [118.4, 26.4, .9], [117.4, 29.6, 1.0],
   [121.0, 24.25, .9], [120.9, 23.45, 1.0], [120.8, 22.75, .8], [121.1, 17.6, .9], [121.2, 16.5, .8], [120.9, 15.7, .7], [130.9, 32.6, .7], [130.6, 31.8, .6]];
@@ -172,7 +173,7 @@ function shipSvg(id, mine) {
     ${mine ? '<ellipse class="me-ring" cx="0" cy="1.6" rx="6.2" ry="2.2"/>' : ''}
     <g class="bob" style="animation-delay:-${(id.length * 0.37) % 2}s"><g class="flip" transform="scale(.62)">
       <path class="wake" d="M-7 3.2q1.6-.9 3.2 0t3.2 0t3.2 0"/>${shipArt(id)}</g></g>
-    <text class="ship-name ${mine ? 'me' : ''}" y="4.6" text-anchor="middle">${mine ? '我方・' : ''}${SHORT[id] || ''}</text>
+    ${mine ? '<g class="me-tag" transform="translate(0 -9.2)"><rect x="-1.8" y="-1.8" width="3.6" height="3.6" rx=".4"/><text y="1.05" text-anchor="middle">我</text></g>' : ''}<title>${TEAMS[id]?.name || ''}</title>
   </g>`;
 }
 
@@ -239,25 +240,23 @@ export function chartSvg(opts) {
       <filter id="landSh" x="-5%" y="-5%" width="110%" height="110%"><feDropShadow dx=".4" dy=".6" stdDeviation=".5" flood-opacity=".25"/></filter>
     </defs>
     <rect width="${W}" height="${H}" fill="url(#seaG)"/>
-    <rect width="${W}" height="${H}" fill="url(#wavesP)"/>
     <g class="gusts">${gusts.join('')}</g>
-    <path class="shoal" d="${LAND_D}"/>
-    <path class="land" d="${LAND_D}" filter="url(#landSh)"/>
-    ${MTN_SVG}
+    <path class="wl w3" d="${LAND_D}"/><path class="wl w2" d="${LAND_D}"/><path class="wl w1" d="${LAND_D}"/>
+    <path class="land" d="${LAND_D}"/>
     ${labels}
-    <path class="ext" d="${bat}"/><path class="ext" d="${aca}"/><path class="ext" d="${mac}"/>
+    <path class="ext" d="${bat}"/><path class="ext" d="${aca}"/>
     <text class="extl" x="${r1(proj(114.4, 10.7)[0])}" y="${r1(proj(114.4, 10.7)[1])}">↙ 往巴達維亞・歐洲</text>
     <text class="extl" x="${W - 1.5}" y="${r1(proj(132.5, 13.4)[1] - 2)}" text-anchor="end">往阿卡普科・美洲 →</text>
-    <text class="extl" x="1.5" y="${r1(proj(112.8, 20.6)[1] + 4)}">← 往澳門</text>
     <g class="lanes">${routes}</g>
     ${ports}
     <g class="compass" transform="translate(${r1(cx)} ${r1(cy)})">
-      <circle r="7.4" class="cmp-bg"/><circle r="5" class="cmp-ring"/>
-      <path d="M0 -4.6L1 0L0 4.6L-1 0Z" class="cmp-ns"/><path d="M-4.6 0L0 -1L4.6 0L0 1Z" class="cmp-ew"/>
-      <text y="-5.5" text-anchor="middle" class="cmp-t" dy=".1">子</text><text y="7" text-anchor="middle" class="cmp-t">午</text>
-      <text x="6.2" y=".9" text-anchor="middle" class="cmp-t">卯</text><text x="-6.2" y=".9" text-anchor="middle" class="cmp-t">酉</text></g>
+      <circle r="6.2" class="cmp-ring"/><circle r="5.2" class="cmp-ring"/>
+      <path class="cmp-ray" d="M0 -6.2V6.2M-6.2 0H6.2M-4.4 -4.4L4.4 4.4M4.4 -4.4L-4.4 4.4"/>
+      <path d="M0 -5.2L.9 0L0 5.2L-.9 0Z" class="cmp-ns"/><path d="M-5.2 0L0 -.7L5.2 0L0 .7Z" class="cmp-ew"/>
+      <text y="-7.1" text-anchor="middle" class="cmp-t">子</text><text y="9" text-anchor="middle" class="cmp-t">午</text>
+      <text x="8" y=".9" text-anchor="middle" class="cmp-t">卯</text><text x="-8" y=".9" text-anchor="middle" class="cmp-t">酉</text></g>
     <g class="ships">${ships}</g>
-    <g class="season" transform="translate(2 2)"><rect width="25.5" height="9" rx="2" class="season-bg"/>
+    <g class="season" transform="translate(2.5 2.5)"><rect width="25.5" height="9" rx=".6" class="season-bg"/><rect x=".7" y=".7" width="24.1" height="7.6" rx=".3" class="season-rim"/>
       <path transform="translate(4.5 4.5) rotate(${winter ? 225 : 45})" d="M-2.6 0H2.2M.6 -1.6L2.4 0L.6 1.6" class="season-ar"/>
       <text x="9" y="3.9" class="season-t">${winter ? '冬・東北季風' : '夏・西南季風'}</text>
       <text x="9" y="7.4" class="season-s">${winter ? '往南順風' : '往北順風'}</text></g>

@@ -1,12 +1,12 @@
-import { firebaseConfig, allowGuest } from './firebase-config.js?v=20261103v';
-import { createMemoryBackend } from './backend-memory.js?v=20261103v';
-import { Host } from './host.js?v=20261103v';
-import * as L from './logic.js?v=20261103v';
-import { chartSvg, layoutChart } from './chart.js?v=20261103v';
+import { firebaseConfig, allowGuest } from './firebase-config.js?v=20261103w';
+import { createMemoryBackend } from './backend-memory.js?v=20261103w';
+import { Host } from './host.js?v=20261103w';
+import * as L from './logic.js?v=20261103w';
+import { chartSvg, layoutChart } from './chart.js?v=20261103w';
 import {
   PORTS, GOODS, POS, ROUTES, TEAMS, TEAM_IDS, HOLD, ROUNDS, PHASES, PHASE_NAME, PHASE_HINT,
   EVENTS, RECOMMENDED_ORDER, BASE_PRICES, ERAS, PORT_NOTE, OPEN_YEAR, PORT_OPEN,
-} from './data.js?v=20261103v';
+} from './data.js?v=20261103w';
 
 // ================= 工具 =================
 const $ = (s, el = document) => el.querySelector(s);
@@ -57,7 +57,7 @@ function clearSubs() { U.subs.forEach((u) => { try { u(); } catch { /* 已取消
 async function boot() {
   if (!configured || params.has('demo')) return startDemo();
   try {
-    const { createFirebaseBackend } = await import('./backend-firebase.js?v=20261103v');
+    const { createFirebaseBackend } = await import('./backend-firebase.js?v=20261103w');
     U.backend = await createFirebaseBackend(firebaseConfig);
   } catch (e) {
     console.error(e);
@@ -442,7 +442,9 @@ function chartCard(room, teams, mine, { selectable = null, dest = null, focus = 
   const round = room.round || 1;
   const tags = {};
   if (mine && !selectable) for (const p of PORTS) if (L.portOpen(p, round) && L.tradeBan(mine, p, round)) tags[p] = '不能交易';
+  const key = Object.keys(teams).filter((id) => Object.keys(teams[id].members || {}).length).map((id) => `<span><i style="background:${teamColor(id)}"></i>${esc(TEAMS[id].name)}${id === mine ? '（我方）' : ''}</span>`).join('');
   return `<div class="card chart-card">${chartSvg({ round, teams, mine, dest, focus, selectable, shut: shutPorts(round), tags, routeClass: laneClass(room, from) })}
+    <div class="fleet-key">${key}</div>
     ${legend ? `<div class="legend">${from ? '<span><i style="border-color:var(--good)"></i>1 回合到</span><span><i style="border-color:var(--warn);border-top-style:dashed"></i>2 回合到</span><span><i style="border-color:var(--muted);border-top-style:dotted"></i>這季不能航行</span>' : ''}<span class="muted">灰色港口尚未開港；點港口看詳情</span></div>` : ''}</div>`;
 }
 function eraCard(round, lobby = false, compact = false) {
