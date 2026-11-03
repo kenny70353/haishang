@@ -1,5 +1,5 @@
 // 《航海通商》海圖：東亞海域地形、航線、港口與各勢力船隻（含航行動畫）
-import { PORTS, ROUTES, TEAMS } from './data.js?v=20261103h';
+import { PORTS, ROUTES, TEAMS } from './data.js?v=20261103v';
 
 // ---------- 投影 ----------
 // 以臺灣海峽為中心的「魚眼」投影：海峽附近放大約 3 倍，長崎、馬尼拉等遠端維持在畫面內。
@@ -86,13 +86,17 @@ const WAY = {
   '月港|馬尼拉': [[118.4, 23.9], [118.4, 22.5], [118.5, 20.0], [118.9, 17.0], [119.3, 15.4], [120.0, 14.6], [120.4, 14.3], [120.65, 14.45]],
 };
 const LABELS = [
-  ['大明', 116.3, 27.2, 'land big'], ['臺灣', 121.0, 23.9, 'land'], ['呂宋', 121.1, 16.6, 'land'], ['日本', 131.0, 32.2, 'land'],
+  ['大明', 116.7, 27.4, 'land big'], ['臺灣', 121.0, 23.9, 'land'], ['呂宋', 121.1, 16.6, 'land'], ['日本', 131.0, 32.2, 'land'],
   ['琉球', 128.1, 27.3, 'land sm'], ['朝鮮', 127.5, 34.5, 'land sm'],
   ['臺灣海峽', 117.6, 22.3, 'sea'], ['南海', 116.0, 17.0, 'sea big'], ['東海', 124.6, 29.2, 'sea'], ['太平洋', 127.6, 19.0, 'sea big'],
 ];
 
 // 預先計算：陸地路徑、港口座標、航線點列
 const LAND_D = Object.values(LAND).map(polyPath).join('');
+// 山形（仿明代輿圖的青綠山頭）
+const MTN = [[118.7, 28.3, 1.0], [119.5, 29.3, .9], [116.4, 24.5, 1.1], [117.8, 25.4, .9], [115.2, 23.6, 1.0], [118.4, 26.4, .9], [117.4, 29.6, 1.0],
+  [121.0, 24.25, .9], [120.9, 23.45, 1.0], [120.8, 22.75, .8], [121.1, 17.6, .9], [121.2, 16.5, .8], [120.9, 15.7, .7], [130.9, 32.6, .7], [130.6, 31.8, .6]];
+const MTN_SVG = MTN.map(([lo, la, k]) => { const [x, y] = proj(lo, la); return `<g transform="translate(${r1(x)} ${r1(y)}) scale(${k})"><path class="mtn" d="M-2.6 0L-1 -2.8L-.2 -1.6L.9 -3.6L2.8 0Z"/><path class="mtn-hi" d="M.9 -3.6L.5 -1.6M-1 -2.8L-1.2 -1.2"/></g>`; }).join('');
 export const PXY = Object.fromEntries(PORTS.map((p) => [p, proj(...PORT_GEO[p])]));
 const RT = ROUTES.map(([a, b, type]) => {
   const wp = [PORT_GEO[a], ...(WAY[`${a}|${b}`] || WAY[`${b}|${a}`]?.slice().reverse() || []), PORT_GEO[b]];
@@ -201,13 +205,15 @@ export function chartSvg(opts) {
     const closed = shut[p];
     const hint = closed || (selectable ? selectable[p] : tags[p]) || null;
     const cls = ['port', p === myPort ? 'mine' : '', p === dest ? 'dest' : '', p === focus ? 'focus' : '', closed ? 'shut' : '', (selectable && selectable[p] === undefined) || closed ? 'off' : '', tags[p] && !selectable ? 'banned' : ''].join(' ');
-    return `<g class="${cls}" data-act="port" data-v="${p}" role="button" tabindex="0" aria-label="${p}">
+    const sw = p.length * 3.3 + 2.4, sh = 5;
+    const sx = r1(lx + (wlab - sw) / 2), sy = r1(ly - 0.2);
+    return `<g class="${cls}" data-act="port" data-v="${p}" role="button" tabindex="0" aria-label="${p}${closed ? '（' + closed + '）' : ''}">
       <circle class="hit" cx="${x}" cy="${y}" r="5.5"/>
-      <circle class="halo" cx="${x}" cy="${y}" r="3.4"/>
-      <path class="fort" d="M${x - 1.8} ${y + 1.4}V${y - .6}h.7v-.7h.7v.7h.8v-.7h.7v.7h.7v2Z"/>
-      <rect class="plate" x="${r1(lx)}" y="${r1(ly)}" width="${r1(wlab)}" height="4.6" rx="1"/>
+      <circle class="pin" cx="${x}" cy="${y}" r="1"/>
+      <rect class="seal-bg" x="${sx}" y="${sy}" width="${r1(sw)}" height="${sh}" rx=".5"/>
+      <rect class="seal-rim" x="${r1(sx + .55)}" y="${r1(sy + .55)}" width="${r1(sw - 1.1)}" height="${sh - 1.1}" rx=".3"/>
       <text class="pname" x="${r1(lx + wlab / 2)}" y="${r1(ly + 3.5)}" text-anchor="middle">${p}</text>
-      ${hint ? `<text class="phint" x="${r1(lx + wlab / 2)}" y="${r1(ly + 7.6)}" text-anchor="middle">${hint}</text>` : ''}
+      ${hint ? `<text class="phint" x="${r1(lx + wlab / 2)}" y="${r1(ly + 7.9)}" text-anchor="middle">${hint}</text>` : ''}
     </g>`;
   }).join('');
   const labels = LABELS.map(([t, lo, la, cls]) => { const [x, y] = proj(lo, la); return `<text class="lbl ${cls}" x="${r1(x)}" y="${r1(y)}" text-anchor="middle">${t}</text>`; }).join('');
@@ -229,15 +235,15 @@ export function chartSvg(opts) {
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="東亞海圖：港口、航線與各勢力船隻">
     <defs>
       <radialGradient id="seaG" cx="30%" cy="45%" r="85%"><stop offset="0" stop-color="var(--sea-a)"/><stop offset="1" stop-color="var(--sea-b)"/></radialGradient>
-      <pattern id="wavesP" width="9" height="6" patternUnits="userSpaceOnUse"><path d="M0 3q1.1-1.2 2.25 0t2.25 0" class="wv"/><path d="M4.5 6q1.1-1.2 2.25 0t2.25 0" class="wv"/></pattern>
+      <pattern id="wavesP" width="6" height="4" patternUnits="userSpaceOnUse"><path d="M0 2q.75-1 1.5 0t1.5 0" class="wv"/><path d="M3 4q.75-1 1.5 0t1.5 0" class="wv"/><path d="M3 0q.75-1 1.5 0t1.5 0" class="wv"/></pattern>
       <filter id="landSh" x="-5%" y="-5%" width="110%" height="110%"><feDropShadow dx=".4" dy=".6" stdDeviation=".5" flood-opacity=".25"/></filter>
     </defs>
     <rect width="${W}" height="${H}" fill="url(#seaG)"/>
-    <rect width="${W}" height="${H}" fill="url(#wavesP)" opacity=".5"/>
-    ${grat.join('')}
+    <rect width="${W}" height="${H}" fill="url(#wavesP)"/>
     <g class="gusts">${gusts.join('')}</g>
     <path class="shoal" d="${LAND_D}"/>
     <path class="land" d="${LAND_D}" filter="url(#landSh)"/>
+    ${MTN_SVG}
     ${labels}
     <path class="ext" d="${bat}"/><path class="ext" d="${aca}"/><path class="ext" d="${mac}"/>
     <text class="extl" x="${r1(proj(114.4, 10.7)[0])}" y="${r1(proj(114.4, 10.7)[1])}">↙ 往巴達維亞・歐洲</text>
@@ -246,8 +252,10 @@ export function chartSvg(opts) {
     <g class="lanes">${routes}</g>
     ${ports}
     <g class="compass" transform="translate(${r1(cx)} ${r1(cy)})">
-      <circle r="7" class="cmp-bg"/><path d="M0 -6.5L1.2 0L0 6.5L-1.2 0Z" class="cmp-ns"/><path d="M-6.5 0L0 -1.2L6.5 0L0 1.2Z" class="cmp-ew"/>
-      <text y="-7.8" text-anchor="middle" class="cmp-t">北</text></g>
+      <circle r="7.4" class="cmp-bg"/><circle r="5" class="cmp-ring"/>
+      <path d="M0 -4.6L1 0L0 4.6L-1 0Z" class="cmp-ns"/><path d="M-4.6 0L0 -1L4.6 0L0 1Z" class="cmp-ew"/>
+      <text y="-5.5" text-anchor="middle" class="cmp-t" dy=".1">子</text><text y="7" text-anchor="middle" class="cmp-t">午</text>
+      <text x="6.2" y=".9" text-anchor="middle" class="cmp-t">卯</text><text x="-6.2" y=".9" text-anchor="middle" class="cmp-t">酉</text></g>
     <g class="ships">${ships}</g>
     <g class="season" transform="translate(2 2)"><rect width="25.5" height="9" rx="2" class="season-bg"/>
       <path transform="translate(4.5 4.5) rotate(${winter ? 225 : 45})" d="M-2.6 0H2.2M.6 -1.6L2.4 0L.6 1.6" class="season-ar"/>

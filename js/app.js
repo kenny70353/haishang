@@ -1,12 +1,12 @@
-import { firebaseConfig, allowGuest } from './firebase-config.js?v=20261103h';
-import { createMemoryBackend } from './backend-memory.js?v=20261103h';
-import { Host } from './host.js?v=20261103h';
-import * as L from './logic.js?v=20261103h';
-import { chartSvg, layoutChart } from './chart.js?v=20261103h';
+import { firebaseConfig, allowGuest } from './firebase-config.js?v=20261103v';
+import { createMemoryBackend } from './backend-memory.js?v=20261103v';
+import { Host } from './host.js?v=20261103v';
+import * as L from './logic.js?v=20261103v';
+import { chartSvg, layoutChart } from './chart.js?v=20261103v';
 import {
   PORTS, GOODS, POS, ROUTES, TEAMS, TEAM_IDS, HOLD, ROUNDS, PHASES, PHASE_NAME, PHASE_HINT,
   EVENTS, RECOMMENDED_ORDER, BASE_PRICES, ERAS, PORT_NOTE, OPEN_YEAR, PORT_OPEN,
-} from './data.js?v=20261103h';
+} from './data.js?v=20261103v';
 
 // ================= 工具 =================
 const $ = (s, el = document) => el.querySelector(s);
@@ -57,7 +57,7 @@ function clearSubs() { U.subs.forEach((u) => { try { u(); } catch { /* 已取消
 async function boot() {
   if (!configured || params.has('demo')) return startDemo();
   try {
-    const { createFirebaseBackend } = await import('./backend-firebase.js?v=20261103h');
+    const { createFirebaseBackend } = await import('./backend-firebase.js?v=20261103v');
     U.backend = await createFirebaseBackend(firebaseConfig);
   } catch (e) {
     console.error(e);
@@ -450,10 +450,10 @@ function eraCard(round, lobby = false, compact = false) {
   if (!e) return '';
   const open = PORTS.filter((p) => L.portOpen(p, round));
   const key = `era${round}`;
-  const shut = compact && U.draft.eraClosed === key;
-  return `<div class="era card ${shut ? 'shut' : ''}"><div class="era-head"><span class="era-years">${e.years}</span><h2>${lobby ? '開局時代背景：' : ''}${esc(e.title)}</h2>
-    ${compact ? `<button class="btn sm ghost" data-act="eraToggle" data-v="${key}">${shut ? '展開' : '收合'}</button>` : ''}</div>
-    ${shut ? '' : `<p class="era-intro">${esc(e.intro)}</p><p class="small muted" style="margin:6px 0 0">開放的貿易港：${open.join('、')}</p>`}</div>`;
+  const full = !compact || U.draft.eraOpen === key;
+  return `<div class="era card ${full ? '' : 'clamp'}"><span class="era-years">${e.years.replace('–', '︱')}</span><div class="era-head"><h2>${lobby ? '開局時代背景：' : ''}${esc(e.title)}</h2>
+    ${compact ? `<button class="btn sm ghost" data-act="eraToggle" data-v="${key}" aria-expanded="${full}">${full ? '收合' : '讀全文'}</button>` : ''}</div>
+    <p class="era-intro">${esc(e.intro)}</p><p class="small muted era-open">開放的貿易港：${open.join('、')}</p></div>`;
 }
 function portInfo(room, teams, tid, p) {
   const t = teams[tid];
@@ -781,7 +781,7 @@ document.addEventListener('click', async (e) => {
         if (!U.draft.order) tabOrders();
         U.draft.order.dest = v; render(); window.scrollTo(0, 0); break;
       }
-      case 'eraToggle': U.draft.eraClosed = U.draft.eraClosed === v ? '' : v; render(); break;
+      case 'eraToggle': U.draft.eraOpen = U.draft.eraOpen === v ? '' : v; render(); break;
       case 'sendReview': await send('review', { text: $('#review').value }); break;
       default: break;
     }
