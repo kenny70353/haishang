@@ -30,11 +30,14 @@ export async function createFirebaseBackend(config) {
     async signInGuest(name) {
       const cred = await A.signInAnonymously(auth);
       await A.updateProfile(cred.user, { displayName: name });
-      backend.user = { uid: cred.user.uid, name, guest: true };
+      backend.user = { uid: cred.user.uid, name, email: '', guest: true };
+      // onAuthStateChanged 會在 updateProfile 之前觸發，名字還是空的，這裡補通知一次
+      if (backend._authCb) backend._authCb(backend.user);
       return backend.user;
     },
     async signOut() { await A.signOut(auth); },
     onAuth(cb) {
+      backend._authCb = cb;
       return A.onAuthStateChanged(auth, (u) => {
         backend.user = u ? { uid: u.uid, name: u.displayName || '船員', email: u.email || '', guest: u.isAnonymous } : null;
         cb(backend.user);
