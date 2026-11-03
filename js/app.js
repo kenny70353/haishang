@@ -5,7 +5,7 @@ import * as L from './logic.js';
 import { chartSvg, layoutChart } from './chart.js';
 import {
   PORTS, GOODS, POS, ROUTES, TEAMS, TEAM_IDS, HOLD, ROUNDS, PHASES, PHASE_NAME, PHASE_HINT,
-  EVENTS, RECOMMENDED_ORDER, BASE_PRICES,
+  EVENTS, RECOMMENDED_ORDER, BASE_PRICES, ERAS, PORT_NOTE, OPEN_YEAR, PORT_OPEN,
 } from './data.js';
 
 // ================= 工具 =================
@@ -203,13 +203,11 @@ function viewTeacherSetup() {
         <button data-act="mode" data-v="gibberish" class="${mode === 'gibberish' ? 'on' : ''}">亂碼版（第一輪試玩）</button>
         <button data-act="mode" data-v="plain" class="${mode === 'plain' ? 'on' : ''}">明碼版</button>
       </div></div>
-    <div><div class="small muted">事件順序（每回合一張，已預填建議順序）</div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>回合</th><th>季節</th><th>事件</th></tr></thead><tbody>
-      ${order.map((ev, i) => `<tr><td>第 ${i + 1} 回合</td><td>${L.season(i + 1)}</td><td>
-        <select data-ev="${i}">${Object.entries(EVENTS).map(([k, e]) => `<option value="${k}" ${+k === ev ? 'selected' : ''}>${k}. ${esc(e.title)}${e.summerOnly ? '（限夏季）' : ''}</option>`).join('')}</select>
-        ${EVENTS[ev].summerOnly && L.season(i + 1) !== '夏' ? '<div class="small" style="color:var(--bad)">颱風只在夏季生效，這回合會落空</div>' : ''}
-      </td></tr>`).join('')}
-    </tbody></table></div></div>
+    <div><div class="small muted">歷史進程（依史實固定：每回合結束時發生的大事，決定下一個時期的局勢）</div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>回合</th><th>時期</th><th>回合結束時的大事</th></tr></thead><tbody>
+      ${RECOMMENDED_ORDER.map((ev, i) => `<tr><td>第 ${i + 1} 回合<div class="small muted">${L.season(i + 1)}季</div></td><td>${ERAS[i + 1].years}<div class="small">${esc(ERAS[i + 1].title)}</div></td><td>${EVENTS[ev].year} ${esc(EVENTS[ev].title)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="small muted">學生不知道下一件大事是什麼，只能從情報推測；讀過這段歷史的學生會更有優勢。</p></div>
     <div class="row"><button class="btn" data-act="home">返回</button><button class="btn primary" data-act="createRoom">建立</button></div>
   </div></div>`;
 }
@@ -237,7 +235,7 @@ function viewTeacher() {
   const msgs = Object.values(U.D.msgs).sort((a, b) => a.ts - b.ts).slice(-40);
   return `<div class="shell">
     <div class="topbar"><span class="brand">航海通商</span><span class="chip">港務官</span>
-      ${r.round ? `<span class="chip">第 ${r.round}/${ROUNDS} 回合・${seasonOf(r.round)}季</span>` : ''}
+      ${r.round ? `<span class="chip">第 ${r.round}/${ROUNDS} 回合・${ERAS[r.round].years}・${seasonOf(r.round)}季</span>` : ''}
       <span class="chip phase">${PHASE_NAME[r.phase]}</span><span class="chip timer" data-timer hidden></span>
       <span class="spacer"></span>${U.demo ? '' : '<a href="#" data-act="home" class="small" style="color:inherit">離開</a>'}</div>
     <div class="main">
@@ -259,6 +257,7 @@ function viewTeacher() {
               ${r.status === 'playing' ? `<span class="small muted">計時：</span>${[2, 3, 5].map((m) => `<button class="btn sm" data-act="t-timer" data-v="${m * 60}">${m} 分</button>`).join('')}<button class="btn sm ghost" data-act="t-timer" data-v="0">取消</button>` : ''}
             </div>
           </div>
+          ${eraCard(r.round || 1, r.status === 'lobby')}
           ${chartCard(r, S.teams, null, { legend: false, focus: U.portSel })}
           ${r.status === 'lobby' ? viewTeacherLobby(S) : ''}
           ${r.status !== 'lobby' ? `<div class="card"><h2>各組狀況 <small>已完成 ${offers} 筆組間交換</small></h2>
@@ -270,10 +269,10 @@ function viewTeacher() {
           ${r.status !== 'lobby' ? priceBoard(r, null) : ''}
         </div>
         <div>
-          ${r.status === 'playing' ? `<div class="card"><h2>本回合事件 <small>只有老師看得到</small></h2>
-            <p style="margin:0"><b>${ev}. ${esc(EVENTS[ev].title)}</b>：${esc(EVENTS[ev].text)}</p>
+          ${r.status === 'playing' ? `<div class="card"><h2>本回合結束時的大事 <small>只有老師看得到</small></h2>
+            <p style="margin:0"><b>${EVENTS[ev].year} 年 ${esc(EVENTS[ev].title)}</b>：${esc(EVENTS[ev].text)}</p>
             <p class="small muted">真情報在 ${EVENTS[ev].trueAt.join('、')}；謠言在 ${EVENTS[ev].rumorAt}。</p>
-            ${r.round < ROUNDS ? `<p class="small muted">下一回合：${esc(EVENTS[S.secret.eventOrder[r.round]].title)}</p>` : ''}</div>` : ''}
+            ${r.round < ROUNDS ? `<p class="small muted">再下一件：${EVENTS[S.secret.eventOrder[r.round]].year} ${esc(EVENTS[S.secret.eventOrder[r.round]].title)}</p>` : ''}</div>` : ''}
           ${r.status === 'ended' ? viewRanking(S.teams, active, true) : ''}
           ${r.lastReport ? reportCard(r.lastReport) : ''}
           <div class="card"><h2>訊息監看 <small>含各組私訊</small></h2>
@@ -361,7 +360,7 @@ function viewStudent() {
   if (!room) return `<div class="main"><div class="boot">正在找房間 ${esc(U.code)}…</div></div>`;
   const tid = myTeamId();
   const top = `<div class="topbar"><span class="brand">航海通商</span><span class="chip">房間 ${esc(room.code)}</span>
-    ${room.round ? `<span class="chip">第 ${room.round}/${ROUNDS} 回合・${seasonOf(room.round)}季</span>` : ''}
+    ${room.round ? `<span class="chip">第 ${room.round}/${ROUNDS} 回合・${ERAS[room.round].years}・${seasonOf(room.round)}季</span>` : ''}
     <span class="chip phase">${PHASE_NAME[room.phase]}</span><span class="chip timer" data-timer hidden></span>
     <span class="spacer"></span>${U.demo ? '' : '<a href="#" data-act="home" class="small" style="color:inherit">離開</a>'}</div>`;
   if (!tid) return `<div class="shell">${top}<div class="main">${viewPickTeam(room)}</div></div>`;
@@ -371,7 +370,7 @@ function viewStudent() {
       <div class="team-banner"><span class="flag" style="background:${teamColor(tid)}"></span><h2 style="margin:0">${esc(t.name)}</h2></div>
       <p>起始港：<b>${TEAMS[tid].port}</b>。特殊能力：${esc(TEAMS[tid].ability)}</p>
       <p class="small muted">同組船員：${esc(Object.values(t.members).join('、'))}</p>
-      <p>等待港務官開始遊戲⋯⋯ 可以先看看規則：</p>${rulesHtml()}
+      ${eraCard(1, true)}<p>等待港務官開始遊戲⋯⋯ 可以先看看規則：</p>${rulesHtml()}
       <button class="btn sm ghost" data-act="leaveTeam">換一個勢力</button></div></div></div>`;
   }
   const tabs = [['map', '圖', '海圖'], ['market', '市', '市場'], ['intel', '報', '情報'], ['talk', '談', '談判'], ['orders', '令', '指令'], ['log', '誌', '日誌']];
@@ -380,6 +379,7 @@ function viewStudent() {
   if (U.tab === 'talk') U.seenMsg = Math.max(U.seenMsg, ...Object.values(U.D.msgs).map((m) => m.ts || 0), 0);
   return `<div class="shell">${top}<div class="main">
     ${statusStrip(tid)}
+    ${room.status !== 'lobby' && room.round ? eraCard(room.round, false, true) : ''}
     ${room.status === 'playing' ? `<div class="hint"><b>${PHASE_NAME[room.phase]}階段</b>：${esc(PHASE_HINT[room.phase])}</div>` : ''}
     <nav class="tabs">${tabs.map(([k, ico, nm]) => `<button data-tab="${k}" class="${U.tab === k ? 'on' : ''}"><span class="ico">${ico}</span>${nm}${k === 'talk' && unreadTalk && U.tab !== 'talk' ? '<i class="dot"></i>' : ''}</button>`).join('')}</nav>
     ${body}
@@ -408,7 +408,7 @@ function statusStrip(tid) {
     <div class="status">
       <div class="stat"><span>位置</span><b>${t.sea ? '海上' : t.port}</b>${t.sea ? `<span>前往${t.sea.to}，第 ${t.sea.arrive} 回合抵達</span>` : ''}</div>
       <div class="stat"><span>銀兩</span><b>${t.silver}</b></div>
-      <div class="stat"><span>貨艙</span><b>${n}/${HOLD}</b><span>${esc(cargoText(t.cargo))}</span></div>
+      <div class="stat"><span>貨艙</span><b>${n}/${L.holdOf(tid)}</b><span>${esc(cargoText(t.cargo))}</span></div>
       <div class="stat"><span>聲望</span><b>${t.rep}</b></div>
     </div>`;
 }
@@ -426,28 +426,53 @@ function destHints(room, t) {
   const h = { [t.port]: '目前位置' };
   for (const p of PORTS) {
     if (p === t.port || !L.routeBetween(t.port, p)) continue;
+    if (!L.portOpen(p, room.round)) continue;
+    if (L.destBlock(t.id, p, room.round)) { h[p] = '禁止前往'; continue; }
     const n = L.travelTime(t.port, p, room.round || 1, room.flags || {});
-    h[p] = n == null ? '這季不能去' : `${n} 回合`;
+    h[p] = n == null ? '這季逆風' : `${n} 回合${L.tradeBan(t.id, p, room.round) ? '・不能交易' : ''}`;
   }
   return h;
+}
+function shutPorts(round) {
+  return Object.fromEntries(PORTS.filter((p) => !L.portOpen(p, round)).map((p) => [p, `${OPEN_YEAR[p]} 年開港`]));
 }
 function chartCard(room, teams, mine, { selectable = null, dest = null, focus = null, legend = true } = {}) {
   const me = mine && teams[mine];
   const from = me && !me.sea ? me.port : null;
-  return `<div class="card chart-card">${chartSvg({ round: room.round || 1, teams, mine, dest, focus, selectable, routeClass: laneClass(room, from) })}
-    ${legend ? `<div class="legend">${from ? '<span><i style="border-color:var(--good)"></i>1 回合到</span><span><i style="border-color:var(--warn);border-top-style:dashed"></i>2 回合到</span><span><i style="border-color:var(--muted);border-top-style:dotted"></i>這季不能航行</span>' : ''}<span class="muted">點港口看詳情</span></div>` : ''}</div>`;
+  const round = room.round || 1;
+  const tags = {};
+  if (mine && !selectable) for (const p of PORTS) if (L.portOpen(p, round) && L.tradeBan(mine, p, round)) tags[p] = '不能交易';
+  return `<div class="card chart-card">${chartSvg({ round, teams, mine, dest, focus, selectable, shut: shutPorts(round), tags, routeClass: laneClass(room, from) })}
+    ${legend ? `<div class="legend">${from ? '<span><i style="border-color:var(--good)"></i>1 回合到</span><span><i style="border-color:var(--warn);border-top-style:dashed"></i>2 回合到</span><span><i style="border-color:var(--muted);border-top-style:dotted"></i>這季不能航行</span>' : ''}<span class="muted">灰色港口尚未開港；點港口看詳情</span></div>` : ''}</div>`;
+}
+function eraCard(round, lobby = false, compact = false) {
+  const e = ERAS[round];
+  if (!e) return '';
+  const open = PORTS.filter((p) => L.portOpen(p, round));
+  const key = `era${round}`;
+  const shut = compact && U.draft.eraClosed === key;
+  return `<div class="era card ${shut ? 'shut' : ''}"><div class="era-head"><span class="era-years">${e.years}</span><h2>${lobby ? '開局時代背景：' : ''}${esc(e.title)}</h2>
+    ${compact ? `<button class="btn sm ghost" data-act="eraToggle" data-v="${key}">${shut ? '展開' : '收合'}</button>` : ''}</div>
+    ${shut ? '' : `<p class="era-intro">${esc(e.intro)}</p><p class="small muted" style="margin:6px 0 0">開放的貿易港：${open.join('、')}</p>`}</div>`;
 }
 function portInfo(room, teams, tid, p) {
   const t = teams[tid];
+  const round = room.round || 1;
   const base = (room.base || BASE_PRICES)[p], pr = room.prices?.[p] || base;
+  const isOpen = L.portOpen(p, round);
   const here = Object.values(teams).filter((x) => Object.keys(x.members || {}).length && !x.sea && x.port === p);
-  const n = t && !t.sea && t.port !== p && L.routeBetween(t.port, p) ? L.travelTime(t.port, p, room.round || 1, room.flags || {}) : undefined;
-  const canSet = room.status === 'playing' && room.phase === 'orders' && n != null && n !== undefined;
-  const closed = room.flags?.closed && room.flags.closed.round === room.round && room.flags.closed.port === p;
-  return `<div class="card"><h2>${p} <small>${t && !t.sea && t.port === p ? '你在這裡' : n === undefined ? (t?.sea ? '船在海上' : '沒有直達航線') : n == null ? '這季無法從你的港口出航到這裡' : `從${t.port}出發 ${n} 回合`}</small></h2>
-    ${closed ? '<p class="small" style="color:var(--bad)">本回合封港中。</p>' : ''}
+  const blocked = t && L.destBlock(tid, p, round);
+  const n = t && !t.sea && t.port !== p && L.routeBetween(t.port, p) && !blocked ? L.travelTime(t.port, p, round, room.flags || {}) : undefined;
+  const canSet = room.status === 'playing' && room.phase === 'orders' && n != null;
+  const ban = isOpen && t ? L.tradeBan(tid, p, round) : null;
+  const who = TEAM_IDS.filter((id) => teams[id] && Object.keys(teams[id].members || {}).length && !L.tradeBan(id, p, round));
+  const sub = !isOpen ? `${OPEN_YEAR[p]} 年才開港` : t && !t.sea && t.port === p ? '你在這裡' : blocked ? esc(blocked) : n === undefined ? (t?.sea ? '船在海上' : '沒有直達航線') : n == null ? '這季逆風，無法從你的港口出航到這裡' : `從${t.port}出發 ${n} 回合`;
+  return `<div class="card"><h2>${p} <small>${sub}</small></h2>
+    <p class="port-note">${esc(PORT_NOTE[p])}</p>
+    ${isOpen ? `${ban ? `<p class="ban-note"><b>本組不能在這裡交易</b>：${esc(ban)}。</p>` : ''}
     <div class="goods">${GOODS.map((g) => `<div class="good ${pr[g] > base[g] ? 'up' : pr[g] < base[g] ? 'down' : ''}">${goodIcon(g)}<span>${g}</span><b>${pr[g]}</b></div>`).join('')}</div>
-    <p class="small muted" style="margin:8px 0 0">停在港內：${here.length ? here.map((x) => `<span class="flag" style="display:inline-block;background:${teamColor(x.id)}"></span> ${esc(x.name)}`).join('、') : '沒有船'}</p>
+    <p class="small muted" style="margin:8px 0 0">本時期可在此交易：${who.length ? who.map((id) => `<span class="flag" style="display:inline-block;background:${teamColor(id)}"></span> ${esc(TEAMS[id].name)}`).join('、') : '本局沒有勢力'}</p>
+    <p class="small muted" style="margin:4px 0 0">停在港內：${here.length ? here.map((x) => esc(x.name)).join('、') : '沒有船'}</p>` : '<p class="small muted">這個時期還不是本遊戲的貿易港，船不能前往。</p>'}
     ${canSet ? `<button class="btn seal" style="margin-top:10px" data-act="setDest" data-v="${p}">設為下一站</button>` : ''}
   </div>`;
 }
@@ -474,7 +499,7 @@ function routeListHtml(room, port) {
 function priceBoard(room, myPort) {
   const pr = room.prices, base = room.base || BASE_PRICES;
   return `<div class="card"><h2>各港物價 <small>紅字高於基準、綠字低於基準</small></h2><div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>貨物</th>${PORTS.map((p) => `<th class="${p === myPort ? 'hl' : ''}">${p}</th>`).join('')}</tr></thead><tbody>
+    <thead><tr><th>貨物</th>${PORTS.map((p) => `<th class="${p === myPort ? 'hl' : ''}">${p}${L.portOpen(p, room.round || 1) ? '' : '<div class="small muted">未開港</div>'}</th>`).join('')}</tr></thead><tbody>
     ${GOODS.map((g) => `<tr><td>${g}</td>${PORTS.map((p) => { const v = pr[p][g], b = base[p][g]; return `<td class="${p === myPort ? 'hl ' : ''}${v > b ? 'up' : v < b ? 'down' : ''}">${v}</td>`; }).join('')}</tr>`).join('')}
     </tbody></table></div></div>`;
 }
@@ -487,18 +512,18 @@ function tabMarket() {
   const { room, teams } = U.D;
   const tid = myTeamId(), t = teams[tid];
   const canTrade = room.phase === 'trade' && !t.sea && room.status === 'playing';
-  const rs = room.flags?.restrict;
-  const restricted = rs && rs.round === room.round && rs.port === t.port && !rs.allowed.includes(tid);
+  const ban = t.sea ? null : L.tradeBan(tid, t.port, room.round);
+  const restricted = !!ban;
   const pr = room.prices[t.port] || {};
   const panel = t.sea ? '<p>船在海上，抵達港口後才能交易。</p>' : `
-    ${restricted ? `<p class="small" style="color:var(--bad)">${t.port}本回合限制外商，本組不能交易。</p>` : ''}
+    ${restricted ? `<p class="ban-note"><b>本組不能在${t.port}交易</b>：${esc(ban)}。可以和能交易的勢力談判，請他們代買代賣。</p>` : ''}
     ${canTrade ? '' : '<p class="small muted">交易階段才能買賣，現在先看看行情。</p>'}
     ${basisSelect('basisTrade')}
     ${GOODS.map((g) => { const q = U.draft.qty[g] || 1; return `<div class="trade-row"><div class="g">${goodIcon(g)}<b>${g}</b> ${pr[g]} 兩<small>船上 ${t.cargo[g] || 0} 箱</small></div>
       <div class="stepper"><button data-act="qty" data-g="${g}" data-d="-1" aria-label="減少">−</button><span>${q}</span><button data-act="qty" data-g="${g}" data-d="1" aria-label="增加">＋</button></div>
       <div class="row"><button class="btn sm primary" data-act="buy" data-g="${g}" ${canTrade && !restricted ? '' : 'disabled'}>買</button><button class="btn sm" data-act="sell" data-g="${g}" ${canTrade && !restricted && t.cargo[g] ? '' : 'disabled'}>賣</button></div></div>`; }).join('')}
     <p class="small muted">連續買同一種貨，每箱都比前一箱貴 1 兩；連續賣則每箱便宜 1 兩。</p>`;
-  return `<div class="grid2"><div class="card"><h2>${t.sea ? '交易' : t.port + '市集'} <small>船艙上限 ${HOLD} 箱</small></h2>${panel}</div>${priceBoard(room, t.sea ? null : t.port)}</div>`;
+  return `<div class="grid2"><div class="card"><h2>${t.sea ? '交易' : t.port + '市集'} <small>船艙上限 ${L.holdOf(tid)} 箱</small></h2>${panel}</div>${priceBoard(room, t.sea ? null : t.port)}</div>`;
 }
 
 // ---------- 情報 ----------
@@ -583,11 +608,11 @@ function tabOrders() {
   }
   const d = U.draft.order;
   const can = room.phase === 'orders' && room.status === 'playing';
-  const dests = t.sea ? [] : PORTS.filter((p) => p !== t.port && L.routeBetween(t.port, p)).map((p) => ({ p, n: L.travelTime(t.port, p, room.round, room.flags || {}) }));
+  const dests = t.sea ? [] : PORTS.filter((p) => p !== t.port && L.routeBetween(t.port, p)).map((p) => ({ p, n: L.destBlock(tid, p, room.round) ? null : L.travelTime(t.port, p, room.round, room.flags || {}), why: L.destBlock(tid, p, room.round), ban: L.tradeBan(tid, p, room.round) }));
   return `${t.sea ? '' : `<div class="pick-hint small muted">在海圖上點港口，或在下方選擇下一站。</div>`}<div class="grid2 map-grid">${chartCard(room, teams, tid, { selectable: destHints(room, t), dest: d.dest || null, legend: false })}<div class="card"><h2>航向 <small>${seasonOf(room.round)}季・${t.sea ? '海上' : t.port}出發</small></h2>
     ${t.sea ? `<p>船正在海上前往${t.sea.to}，這回合不能改航向，但仍可以下注。</p>` : `<div class="dest">
       <label class="${!d.dest ? 'on' : ''}"><input type="radio" name="dest" value="" ${!d.dest ? 'checked' : ''}> 留在${t.port}</label>
-      ${dests.map(({ p, n }) => `<label class="${d.dest === p ? 'on' : ''}" ${n == null ? 'style="opacity:.5"' : ''}><input type="radio" name="dest" value="${p}" ${d.dest === p ? 'checked' : ''} ${n == null ? 'disabled' : ''}> ${p}<span class="small muted">${n == null ? '這季無法出航' : n + ' 回合'}</span></label>`).join('')}
+      ${dests.map(({ p, n, why, ban }) => `<label class="${d.dest === p ? 'on' : ''}" ${n == null ? 'style="opacity:.5"' : ''}><input type="radio" name="dest" value="${p}" ${d.dest === p ? 'checked' : ''} ${n == null ? 'disabled' : ''}> ${p}<span class="small muted">${why ? esc(why) : n == null ? '這季逆風，無法出航' : n + ' 回合' + (ban ? '・到了也不能交易' : '')}</span></label>`).join('')}
     </div>`}
   </div></div><div class="grid2"><div class="card"><h2>預測下注 <small>猜中拿回 2 倍並 +1 聲望</small></h2>
     <p class="small muted">猜本回合結算的事件會讓哪個港口的哪種貨漲或跌。押 0 代表不下注。</p>
@@ -630,8 +655,11 @@ function rulesHtml() {
     <li>每回合五個階段：情報 → 談判 → 交易 → 指令 → 事件與結算，共 ${ROUNDS} 回合。</li>
     <li>單數回合是冬季（東北季風，往南順風），雙數回合是夏季（西南季風，往北順風）。</li>
     <li>南北航線順風 1 回合、逆風 2 回合；月港往長崎或馬尼拉是長程，順風 2 回合，逆風不能出航。月港—澎湖—大員不受風向影響。</li>
-    <li>買 1 箱漲 1 兩、賣 1 箱跌 1 兩；每回合結算時物價往原本價格回 1 格。船艙最多 ${HOLD} 箱。</li>
+    <li>買 1 箱漲 1 兩、賣 1 箱跌 1 兩；每回合結算時物價往原本價格回 1 格。船艙最多 ${HOLD} 箱（李旦・鄭芝龍集團 ${HOLD + 1} 箱）。</li>
+    <li>港口依史實逐步開放：月港、長崎、馬尼拉一開始就能去；澎湖 1622、大員 1624、雞籠 1626 年才開港。</li>
+    <li>各國有禁令與敵對關係：外國船不得在月港交易、荷蘭船不能進西班牙的港口（反之亦然）、1624 年起日本禁止西班牙船⋯⋯在海圖上點港口可以看到誰能交易。</li>
     <li>情報可能是真的，也可能是謠言。公開指認謠言，猜對 +1 聲望、猜錯 −1。</li>
+    <li>每回合結束時會發生一件真實的歷史大事，影響物價、開港和禁令；情報就是關於這件大事的消息。</li>
     <li>終局分數：銀兩 + 每箱貨 1 分 + 聲望 × 2。</li></ul>`;
 }
 function shipIcon(s) {
@@ -644,7 +672,7 @@ const GOOD_ICON = {
   鹿皮: '<path d="M6 5q6 2 12 0l1 4q-2 3 0 6l-2 5q-5 -2 -10 0l-2 -5q2 -3 0 -6z" fill="#b8814a" stroke="#7a4f24"/><circle cx="10" cy="10" r=".9" fill="#f1dcc0"/><circle cx="14" cy="13" r=".9" fill="#f1dcc0"/><circle cx="11" cy="15" r=".8" fill="#f1dcc0"/>',
   蔗糖: '<path d="M7 8q5 -4 10 0l1 11h-12z" fill="#e9d9b6" stroke="#9b7a44"/><path d="M8 8q4 2 8 0" fill="none" stroke="#9b7a44"/><path d="M9 13h6M9 16h6" stroke="#c7a76a" stroke-width="1"/>',
   白銀: '<path d="M4 15l3 -6h10l3 6q-8 3 -16 0z" fill="#d6dbe1" stroke="#7b8794"/><ellipse cx="12" cy="9.5" rx="4.5" ry="1.4" fill="#eef1f4" stroke="#7b8794" stroke-width=".8"/>',
-  香料: '<path d="M5 17q7 -12 14 0z" fill="#b45309" stroke="#7c2d12"/><circle cx="9" cy="8" r="1.6" fill="#7c2d12"/><circle cx="13" cy="6.5" r="1.4" fill="#9a3412"/><circle cx="15.5" cy="9.5" r="1.3" fill="#7c2d12"/>',
+  胡椒: '<path d="M5 17q7 -12 14 0z" fill="#b45309" stroke="#7c2d12"/><circle cx="9" cy="8" r="1.6" fill="#7c2d12"/><circle cx="13" cy="6.5" r="1.4" fill="#9a3412"/><circle cx="15.5" cy="9.5" r="1.3" fill="#7c2d12"/>',
 };
 function goodIcon(g) { return `<svg class="gico" viewBox="0 0 24 24" aria-hidden="true">${GOOD_ICON[g] || ''}</svg>`; }
 
@@ -678,7 +706,7 @@ document.addEventListener('click', async (e) => {
       case 'mode': U.draft.mode = v; render(); break;
       case 'createRoom': {
         el.disabled = true;
-        U.host = await Host.create(U.backend, { mode: U.draft.mode || 'plain', eventOrder: U.draft.eventOrder });
+        U.host = await Host.create(U.backend, { mode: U.draft.mode || 'plain', eventOrder: RECOMMENDED_ORDER });
         startTeacher();
         break;
       }
@@ -742,6 +770,7 @@ document.addEventListener('click', async (e) => {
           if (!t || t.sea) return toast('船在海上，不能改航向', true);
           if (v === t.port) { U.draft.order.dest = ''; render(); return; }
           if (!L.routeBetween(t.port, v)) return toast(`${t.port}沒有直達${v}的航線`, true);
+          { const why = L.destBlock(myTeamId(), v, room.round); if (why) return toast(why, true); }
           if (L.travelTime(t.port, v, room.round, room.flags || {}) == null) return toast(`這個季節無法從${t.port}前往${v}`, true);
           U.draft.order.dest = v; render(); return;
         }
@@ -752,6 +781,7 @@ document.addEventListener('click', async (e) => {
         if (!U.draft.order) tabOrders();
         U.draft.order.dest = v; render(); window.scrollTo(0, 0); break;
       }
+      case 'eraToggle': U.draft.eraClosed = U.draft.eraClosed === v ? '' : v; render(); break;
       case 'sendReview': await send('review', { text: $('#review').value }); break;
       default: break;
     }

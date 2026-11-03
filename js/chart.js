@@ -70,6 +70,8 @@ const LAND = {
 const PORT_GEO = { 長崎: [129.82, 32.75], 雞籠: [121.74, 25.2], 月港: [118.05, 24.42], 澎湖: [119.57, 23.57], 大員: [120.12, 23.0], 馬尼拉: [120.97, 14.6] };
 // 船停泊時排列的方向（畫面角度，0 = 右、90 = 下），朝向開闊海面
 const PORT_SEA = { 長崎: 165, 雞籠: -60, 月港: 20, 澎湖: 150, 大員: 115, 馬尼拉: 175 };
+// 擠在畫面邊緣的港口改用固定停泊位置
+const PORT_SLOTS = { 長崎: [[-9, 4], [-23, 5], [-15, 15], [-29, 16], [-37, 7]] };
 // 標籤位置
 const PORT_LABEL = { 長崎: 'down', 雞籠: 'right', 月港: 'up', 澎湖: 'right', 大員: 'right', 馬尼拉: 'right' };
 const WAY = {
@@ -79,6 +81,8 @@ const WAY = {
   '月港|澎湖': [[118.5, 24.2], [119.1, 23.8]],
   '澎湖|大員': [[119.85, 23.25]],
   '月港|長崎': [[118.6, 24.3], [119.6, 24.9], [120.6, 25.9], [121.5, 27.2], [122.8, 28.8], [124.8, 30.6], [127.4, 31.9], [129.2, 32.5]],
+  '長崎|馬尼拉': [[128.8, 31.8], [126.0, 28.0], [123.3, 24.6], [122.6, 22.0], [121.3, 20.1], [119.9, 18.5], [119.4, 16.5], [119.6, 15.2], [120.0, 14.6], [120.4, 14.3], [120.65, 14.45]],
+  '馬尼拉|雞籠': [[120.65, 14.45], [120.4, 14.3], [120.0, 14.6], [119.6, 15.2], [119.4, 16.5], [119.9, 18.5], [121.3, 20.1], [122.4, 22.0], [122.3, 24.0], [122.1, 25.2]],
   '月港|馬尼拉': [[118.4, 23.9], [118.4, 22.5], [118.5, 20.0], [118.9, 17.0], [119.3, 15.4], [120.0, 14.6], [120.4, 14.3], [120.65, 14.45]],
 };
 const LABELS = [
@@ -116,7 +120,7 @@ function along(from, to, p) {
 }
 
 // ---------- 船 ----------
-const SHORT = { voc: '荷蘭', esp: '西班牙', zheng: '鄭氏', jpn: '日本', minnan: '閩南' };
+const SHORT = { voc: '荷蘭', esp: '西班牙', zheng: '李旦・鄭芝龍', jpn: '朱印船', minnan: '閩南' };
 const EURO = new Set(['voc', 'esp']);
 function lighten(hex, k) {
   const n = parseInt(hex.slice(1), 16);
@@ -171,7 +175,7 @@ function shipSvg(id, mine) {
 // ---------- 海圖 SVG ----------
 // opts: { round, flags, teams, mine, routeClass(a,b) -> class, selectPorts: { port: hint }, dest, focus }
 export function chartSvg(opts) {
-  const { round = 1, teams = {}, mine = null, dest = null, routeClass, selectable = null, focus = null } = opts;
+  const { round = 1, teams = {}, mine = null, dest = null, routeClass, selectable = null, focus = null, shut = {}, tags = {} } = opts;
   const winter = round % 2 === 1;
   const grat = [];
   for (let lat = 15; lat <= 35; lat += 5) {
@@ -194,8 +198,9 @@ export function chartSvg(opts) {
     const wlab = p.length * 3.3 + 2.2;
     const lx = pos === 'left' ? x - 3 - wlab : pos === 'right' ? x + 3 : Math.min(W - wlab - 1, Math.max(1, x - wlab / 2));
     const ly = pos === 'up' ? y - 8.2 : pos === 'down' ? y + 3.6 : y - 2.3;
-    const hint = selectable ? selectable[p] : null;
-    const cls = ['port', p === myPort ? 'mine' : '', p === dest ? 'dest' : '', p === focus ? 'focus' : '', hint === undefined && selectable ? 'off' : ''].join(' ');
+    const closed = shut[p];
+    const hint = closed || (selectable ? selectable[p] : tags[p]) || null;
+    const cls = ['port', p === myPort ? 'mine' : '', p === dest ? 'dest' : '', p === focus ? 'focus' : '', closed ? 'shut' : '', (selectable && selectable[p] === undefined) || closed ? 'off' : '', tags[p] && !selectable ? 'banned' : ''].join(' ');
     return `<g class="${cls}" data-act="port" data-v="${p}" role="button" tabindex="0" aria-label="${p}">
       <circle class="hit" cx="${x}" cy="${y}" r="5.5"/>
       <circle class="halo" cx="${x}" cy="${y}" r="3.4"/>
@@ -266,6 +271,8 @@ function targetOf(teams, id, slotIdx, slotCount, seaIdx) {
   }
   const p = t.port;
   const [px, py] = PXY[p];
+  const fixed = PORT_SLOTS[p];
+  if (fixed) { const [ox, oy] = fixed[slotIdx % fixed.length]; return { key: `p:${p}`, port: p, x: px + ox, y: py + oy, dir: -1 }; }
   const ang = ((PORT_SEA[p] + (slotIdx - (slotCount - 1) / 2) * 34) * Math.PI) / 180;
   const dist = (p === '長崎' ? 9 : 6.8) + (slotCount > 3 ? (slotIdx % 2) * 2.4 : 0);
   return { key: `p:${p}`, port: p, x: px + Math.cos(ang) * dist, y: py + Math.sin(ang) * dist + 1, dir: px > 70 ? -1 : 1 };

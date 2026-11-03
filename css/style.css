@@ -295,3 +295,19 @@ table.tbl { border-collapse: collapse; width: 100%; font-variant-numeric: tabula
 .fleet { list-style: none; padding: 0; margin: 0; }
 .fleet li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--line); flex-wrap: wrap; }
 .fleet li span:last-child { color: var(--muted); font-size: .88rem; }
+
+/* ---------- 歷史時代 ---------- */
+.era { border-left: 4px solid var(--gold); }
+.era-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.era-head h2 { flex: 1; min-width: 0; }
+.era-years { font-family: var(--serif); font-weight: 800; color: var(--seal); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.era-intro { margin: 8px 0 0; line-height: 1.75; }
+.era.shut { padding-block: 10px; }
+.port-note { font-size: .92rem; color: var(--ink-2); margin: 6px 0 10px; line-height: 1.7; }
+.ban-note { background: color-mix(in srgb, var(--bad) 10%, var(--card)); border: 1px solid color-mix(in srgb, var(--bad) 35%, var(--line)); color: var(--ink); border-radius: 10px; padding: 8px 10px; font-size: .9rem; margin: 0 0 10px; }
+.ban-note b { color: var(--bad); }
+.chart .port.shut .halo { fill: rgba(140,140,140,.55); stroke: rgba(80,80,80,.6); }
+.chart .port.shut .fort { fill: rgba(60,60,60,.6); }
+.chart .port.shut .plate { fill: rgba(235,235,235,.75); stroke: rgba(120,120,120,.6); }
+.chart .port.shut .pname { fill: rgba(70,70,70,.85); }
+.chart .port.banned .phint { fill: #ffd2c8; }

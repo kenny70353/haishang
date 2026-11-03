@@ -2,7 +2,7 @@
 // S = { room, teams: {id: team}, hands: {id: hand}, secret: {decks, cards} }
 import {
   PORTS, GOODS, LAT, BASE_PRICES, ROUTES, TEAMS, TEAM_IDS, START_SILVER, HOLD, ROUNDS,
-  PHASES, EVENTS, INTEL, gibberish,
+  PHASES, EVENTS, INTEL, PORT_OPEN, OPEN_YEAR, gibberish,
 } from './data.js';
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -18,11 +18,12 @@ const pick = (arr) => arr[Math.floor(rng() * arr.length)];
 const shortId = () => Math.floor(rng() * 36 ** 5).toString(36).padStart(5, '0');
 
 export function newGame({ code, teacherUid, mode = 'plain', eventOrder }) {
-  const order = (eventOrder && eventOrder.length === ROUNDS) ? eventOrder.map(Number) : [2, 3, 12, 4, 7, 1];
+  const order = (eventOrder && eventOrder.length === ROUNDS && eventOrder.every((e) => EVENTS[e])) ? eventOrder.map(Number) : [1, 2, 3, 4, 5, 6];
   const teams = {};
   for (const id of TEAM_IDS) {
     const cargo = Object.fromEntries(GOODS.map((g) => [g, 0]));
     if (id === 'esp') cargo['白銀'] = 1;
+    if (id === 'voc') cargo['胡椒'] = 1;
     teams[id] = {
       id, name: TEAMS[id].name, members: {}, silver: START_SILVER, cargo, port: TEAMS[id].port,
       sea: null, rep: 0, zhengUsed: false, order: null, log: [], review: '',
@@ -44,6 +45,29 @@ export function activeTeams(S) {
 }
 export const currentEvent = (S) => S.secret.eventOrder[S.room.round - 1];
 
+// ---------- 歷史規則 ----------
+export const holdOf = (tid) => (tid === 'zheng' ? HOLD + 1 : HOLD);
+export const portOpen = (port, round) => (round || 1) >= (PORT_OPEN[port] || 1);
+// 不能在某港交易的原因（依當時各國的禁令與敵對關係）；可以交易則回傳 null
+export function tradeBan(tid, port, round) {
+  const chinese = ['zheng', 'minnan'].includes(tid);
+  if (port === '月港' && !chinese) return '明朝只准中國商船在月港交易，外國船不得入市';
+  if (port === '長崎' && tid === 'esp' && round >= 3) return '1624 年起日本禁止西班牙船來航';
+  if (port === '長崎' && tid === 'voc' && round === 5) return '濱田彌兵衛事件後，日本暫停與荷蘭貿易（1628–1632）';
+  if (port === '馬尼拉' && tid === 'voc') return '荷蘭與西班牙敵對，馬尼拉不准荷蘭船交易';
+  if (port === '雞籠' && tid === 'voc') return '雞籠由西班牙控制，不准荷蘭船交易';
+  if (port === '大員' && tid === 'esp') return '大員由荷蘭控制，不准西班牙船交易';
+  if (port === '澎湖' && round === 2 && tid === 'esp') return '澎湖由荷蘭佔據，不准西班牙船交易';
+  if (port === '澎湖' && round >= 3 && !chinese) return '1624 年明軍收復澎湖，只准中國商船交易';
+  return null;
+}
+// 不能駛往某港的原因；可以出航則回傳 null（季風另由 travelTime 判斷）
+export function destBlock(tid, to, round) {
+  if (!portOpen(to, round)) return `${to}尚未開港（${OPEN_YEAR[to] || ''} 年才開放）`;
+  if (tid === 'esp' && to === '長崎' && round >= 3) return '1624 年起日本禁止西班牙船來航';
+  return null;
+}
+
 // ---------- 航行 ----------
 export function routeBetween(a, b) {
   return ROUTES.find(([x, y]) => (x === a && y === b) || (x === b && y === a));
@@ -53,6 +77,7 @@ export function routeBetween(a, b) {
 export function travelTime(from, to, round, flags = {}) {
   const r = routeBetween(from, to);
   if (!r) return null;
+  if (!portOpen(to, round)) return null;
   const type = r[2];
   const blk = flags.blockedRoute;
   if (blk && blk.round === round && ((blk.a === from && blk.b === to) || (blk.a === to && blk.b === from))) return null;
@@ -222,12 +247,8 @@ export function resolve(S) {
     if (!o || !o.dest) continue;
     const turns = travelTime(t.port, o.dest, round, r.flags);
     if (turns == null) { log(t, S, `無法前往${o.dest}，留在${t.port}`); continue; }
-    if (portClosedFor(S, id)) {
-      if (id === 'zheng' && !t.zhengUsed) {
-        t.zhengUsed = true;
-        report.push(`${t.name}突破封港。`);
-      } else { log(t, S, `${t.port}封港中，無法出航`); continue; }
-    }
+    const blk = destBlock(id, o.dest, round);
+    if (blk) { log(t, S, `${blk}，留在${t.port}`); continue; }
     const from = t.port;
     if (turns === 1) {
       t.port = o.dest;
@@ -246,55 +267,32 @@ export function resolve(S) {
     if (cur > b) r.prices[p][g] = cur - 1; else if (cur < b) r.prices[p][g] = cur + 1;
   }
 
-  // 3. 事件
+  // 3. 歷史事件（影響下一個時期）
   const flagsNext = {};
-  let eventApplies = true;
-  if (E.summerOnly && season(round) !== '夏') eventApplies = false;
-  report.unshift(`事件：${E.title}——${E.text}`);
-  if (eventApplies) {
-    switch (ev) {
-      case 1:
-        flagsNext.closed = { port: '月港', round: round + 1 };
-        addPrice(S, '月港', '生絲', 2, report, deltas); addPrice(S, '月港', '瓷器', 2, report, deltas); break;
-      case 2: addPrice(S, '長崎', '生絲', 3, report, deltas); break;
-      case 3: addPrice(S, '馬尼拉', '白銀', -2, report, deltas); addPrice(S, '馬尼拉', '生絲', 2, report, deltas); break;
-      case 4:
-        for (const id of ids) {
-          const t = S.teams[id];
-          if (t.sea) { const g = loseCargo(t); if (g) { report.push(`${t.name}在海上遇颱風，失去 1 箱${g}。`); log(t, S, `颱風損失 1 箱${g}`); } }
-        }
-        break;
-      case 5: addPrice(S, '大員', '蔗糖', -2, report, deltas); break;
-      case 6:
-        for (const p of ['大員', '雞籠']) { r.base[p]['鹿皮'] = clamp(r.base[p]['鹿皮'] + 2); addPrice(S, p, '鹿皮', 2, report, deltas); }
-        break;
-      case 7:
-        for (const id of ids) {
-          const t = S.teams[id];
-          if (!t.sea && t.port === '澎湖') {
-            if (t.silver >= 2) { t.silver -= 2; report.push(`${t.name}在澎湖付給海盜 2 銀兩。`); log(t, S, '付給海盜 2 銀兩'); }
-            else { const g = loseCargo(t); report.push(`${t.name}在澎湖被海盜搶走${g ? ' 1 箱' + g : '，但船上空無一物'}。`); if (g) log(t, S, `被海盜搶走 1 箱${g}`); }
-          }
-        }
-        break;
-      case 8: for (const p of PORTS) addPrice(S, p, '香料', 1, report, deltas); break;
-      case 9: {
-        const allowed = ['jpn'];
-        for (const id of ids) {
-          if (S.hands[id].cards.some((c) => { const k = S.secret.cards[c.cid]; return k && k.ev === 9 && k.kind !== 'R'; })) allowed.push(id);
-        }
-        flagsNext.restrict = { port: '長崎', round: round + 1, allowed: [...new Set(allowed)] };
-        break;
+  report.unshift(`${E.year} 年 ${E.title}——${E.text}`);
+  const moveVoc = (from, to, why) => {
+    const t = S.teams.voc;
+    if (!ids.includes('voc') || t.sea || (from && t.port !== from)) return;
+    if (t.port === to) return;
+    t.port = to; report.push(`${t.name}${why}，船隊移往${to}。`); log(t, S, `${why}，船隊移往${to}`);
+  };
+  switch (ev) {
+    case 1: moveVoc(null, '澎湖', '巴達維亞派艦隊佔領澎湖'); addPrice(S, '馬尼拉', '生絲', 2, report, deltas); break;
+    case 2: moveVoc('澎湖', '大員', '撤出澎湖'); addPrice(S, '大員', '鹿皮', 2, report, deltas); break;
+    case 3: addPrice(S, '月港', '生絲', 2, report, deltas); break;
+    case 4: addPrice(S, '長崎', '生絲', 2, report, deltas); break;
+    case 5: addPrice(S, '大員', '生絲', -2, report, deltas); addPrice(S, '大員', '瓷器', -1, report, deltas); break;
+    case 6: {
+      const t = S.teams.jpn;
+      if (ids.includes('jpn') && (t.sea || t.port !== '長崎')) {
+        const lost = [];
+        for (let i = 0; i < 2; i++) { const g = loseCargo(t); if (g) lost.push(g); }
+        report.push(`${t.name}人在海外，回不了日本${lost.length ? '，失去' + lost.join('、') : ''}。`);
+        log(t, S, `幕府禁止出海時人在海外${lost.length ? '，失去' + lost.join('、') : ''}`);
       }
-      case 10:
-        for (const g of GOODS) addPrice(S, '月港', g, -1, report, deltas);
-        flagsNext.openSea = round + 1; break;
-      case 11: flagsNext.blockedRoute = { a: '雞籠', b: '大員', round: round + 1 }; break;
-      case 12: addPrice(S, '長崎', '瓷器', 2, report, deltas); addPrice(S, '馬尼拉', '瓷器', 2, report, deltas); break;
-      default: break;
+      addPrice(S, '長崎', '生絲', 2, report, deltas); break;
     }
-  } else {
-    report.push('（本回合是冬季，颱風沒有成形。）');
+    default: break;
   }
 
   // 3. 預測下注
@@ -334,7 +332,7 @@ export function resolve(S) {
   for (const [cid, k] of Object.entries(S.secret.cards)) if (k.round === round && k.kind !== 'G') reveal[cid] = k.kind === 'R' ? 'rumor' : 'true';
 
   r.flags = flagsNext;
-  r.lastReport = { round, ev, title: E.title, text: E.text, lines: report, reveal };
+  r.lastReport = { round, ev, title: `${E.year} 年 ${E.title}`, text: E.text, lines: report, reveal };
   r.reports.push(r.lastReport);
 }
 
@@ -401,8 +399,8 @@ function trade(S, tid, a) {
   if (t.sea) return fail('船在海上，不能交易');
   const g = a.good;
   if (!GOODS.includes(g)) return fail('沒有這種貨物');
-  const rs = r.flags.restrict;
-  if (rs && rs.round === r.round && rs.port === t.port && !rs.allowed.includes(tid)) return fail(`${t.port}限制外商，本組不能交易`);
+  const ban = tradeBan(tid, t.port, r.round);
+  if (ban) return fail(ban);
   const qty = Math.max(1, Math.min(4, Number(a.qty) || 1));
   const pr = r.prices[t.port];
   let total = 0, done = 0;
@@ -410,7 +408,7 @@ function trade(S, tid, a) {
     let p = pr[g];
     if (tid === 'jpn' && t.port === '長崎' && g === '白銀') p = a.type === 'buy' ? Math.max(1, p - 1) : p + 1;
     if (a.type === 'buy') {
-      if (cargoCount(t) >= HOLD) break;
+      if (cargoCount(t) >= holdOf(tid)) break;
       if (t.silver < p) break;
       t.silver -= p; t.cargo[g] += 1; total += p; done++;
       if (!(tid === 'voc' && t.port === '大員')) pr[g] = clamp(pr[g] + 1);
@@ -420,7 +418,7 @@ function trade(S, tid, a) {
       pr[g] = clamp(pr[g] - 1);
     }
   }
-  if (!done) return fail(a.type === 'buy' ? (cargoCount(t) >= HOLD ? '船艙已滿' : '銀兩不夠') : `船上沒有${g}`);
+  if (!done) return fail(a.type === 'buy' ? (cargoCount(t) >= holdOf(tid) ? '船艙已滿' : '銀兩不夠') : `船上沒有${g}`);
   const verb = a.type === 'buy' ? '買進' : '賣出';
   log(t, S, `在${t.port}${verb} ${done} 箱${g}，共 ${total} 銀兩`, a.basis || null);
   return ok(`${verb} ${done} 箱${g}，共 ${total} 銀兩`);
@@ -432,6 +430,8 @@ function order(S, tid, a) {
   let dest = a.dest || null;
   if (dest) {
     if (t.sea) return fail('船在海上，不能改變航向');
+    const blk = destBlock(tid, dest, r.round);
+    if (blk) return fail(blk);
     const turns = travelTime(t.port, dest, r.round, r.flags);
     if (turns == null) return fail(`這個季節無法從${t.port}前往${dest}`);
   }
@@ -499,8 +499,8 @@ export function respondOffer(S, tid, a) {
   if (e1) return fail(e1);
   const incA = sumCargo(o.want.cargo) - sumCargo(o.give.cargo);
   const incB = -incA;
-  if (cargoCount(A) + incA > HOLD) return fail(`${A.name}船艙放不下`);
-  if (cargoCount(B) + incB > HOLD) return fail(`${B.name}船艙放不下`);
+  if (cargoCount(A) + incA > holdOf(o.from)) return fail(`${A.name}船艙放不下`);
+  if (cargoCount(B) + incB > holdOf(o.to)) return fail(`${B.name}船艙放不下`);
   transfer(S, o.from, o.to, o.give);
   transfer(S, o.to, o.from, o.want);
   log(A, S, `與${B.name}完成交換：付出${packText(o.give)}，得到${packText(o.want)}`);

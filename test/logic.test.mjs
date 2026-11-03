@@ -1,80 +1,109 @@
+// 《航海通商》規則引擎測試（歷史劇本 1609–1635）
 import assert from 'node:assert/strict';
 import * as L from '../js/logic.js';
-import { TEAM_IDS, PORTS, GOODS } from '../js/data.js';
+import { EVENTS, INTEL, PORT_OPEN, ROUTES, BASE_PRICES, GOODS, PORTS } from '../js/data.js';
 
 let seed = 7;
 L.setRandom(() => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; });
 
-// 航行規則
-assert.equal(L.travelTime('長崎', '雞籠', 1), 1, '冬季往南順風');
-assert.equal(L.travelTime('雞籠', '長崎', 1), 2, '冬季往北逆風');
-assert.equal(L.travelTime('雞籠', '長崎', 2), 1, '夏季往北順風');
-assert.equal(L.travelTime('月港', '澎湖', 1), 1, '東西航線');
+// 資料完整性：情報卡放在當回合已開放的港口
+for (let r = 1; r <= 6; r++) {
+  const e = EVENTS[r];
+  assert.ok(e && INTEL[r], `事件 ${r} 缺資料`);
+  for (const p of [...e.trueAt, e.rumorAt]) assert.ok(L.portOpen(p, r), `事件 ${r} 的情報放在未開港的${p}`);
+}
+for (const p of PORTS) for (const g of GOODS) assert.ok(BASE_PRICES[p][g] >= 1, `${p}${g} 缺物價`);
+
+// 開港與航行
+assert.equal(L.travelTime('月港', '澎湖', 1), null, '澎湖第 2 回合才開港');
+assert.equal(L.travelTime('月港', '澎湖', 2), 1);
+assert.equal(L.travelTime('澎湖', '大員', 2), null, '大員第 3 回合才開港');
+assert.equal(L.travelTime('澎湖', '大員', 3), 1);
+assert.equal(L.travelTime('大員', '雞籠', 3), null, '雞籠第 4 回合才開港');
+assert.equal(L.travelTime('大員', '雞籠', 4), 1, '夏季往北順風');
+assert.equal(L.travelTime('月港', '馬尼拉', 1), 2, '冬季長程往南');
 assert.equal(L.travelTime('月港', '長崎', 1), null, '冬季長程往北不能出航');
-assert.equal(L.travelTime('月港', '長崎', 2), 2, '夏季長程往北 2 回合');
-assert.equal(L.travelTime('月港', '長崎', 1, { openSea: 1 }), 2, '開海時不受風向');
-assert.equal(L.travelTime('雞籠', '大員', 3, { blockedRoute: { a: '雞籠', b: '大員', round: 3 } }), null);
-assert.equal(L.travelTime('月港', '大員', 1), null, '沒有直達航線');
+assert.equal(L.travelTime('長崎', '馬尼拉', 1), 2);
+assert.equal(L.travelTime('馬尼拉', '雞籠', 4), 2);
+assert.ok(ROUTES.length === 9);
 
-const S = L.newGame({ code: 'ABCD', teacherUid: 't', mode: 'plain' });
-let r = L.startGame(S); assert.equal(r.ok, false, '沒人時不能開始');
-for (const [i, id] of TEAM_IDS.entries()) L.applyAction(S, { type: 'join', uid: 'u' + i, team: id, name: '學生' + i });
-L.applyAction(S, { type: 'join', uid: 'u9', team: 'voc', name: '第二人' });
-assert.equal(Object.keys(S.teams.voc.members).length, 2);
+// 交易禁令
+assert.ok(L.tradeBan('voc', '月港', 1), '外國船不能在月港交易');
+assert.ok(L.tradeBan('jpn', '月港', 1));
+assert.equal(L.tradeBan('minnan', '月港', 1), null);
+assert.equal(L.tradeBan('esp', '長崎', 2), null, '1624 年前西班牙仍可到日本');
+assert.ok(L.tradeBan('esp', '長崎', 3), '1624 年起禁西班牙');
+assert.ok(L.tradeBan('voc', '長崎', 5) && !L.tradeBan('voc', '長崎', 4) && !L.tradeBan('voc', '長崎', 6), '日荷貿易只在 1628–1632 中斷');
+assert.ok(L.tradeBan('voc', '馬尼拉', 1) && L.tradeBan('esp', '大員', 3) && L.tradeBan('voc', '雞籠', 4));
+assert.equal(L.tradeBan('voc', '澎湖', 2), null, '荷蘭佔據澎湖時可交易');
+assert.ok(L.tradeBan('voc', '澎湖', 3) && L.tradeBan('jpn', '澎湖', 3) && !L.tradeBan('minnan', '澎湖', 3));
+assert.ok(L.destBlock('voc', '大員', 2) && !L.destBlock('voc', '大員', 3));
+assert.ok(L.destBlock('esp', '長崎', 3) && !L.destBlock('esp', '長崎', 2));
+assert.equal(L.holdOf('zheng'), 5);
+
+// 開局（1609）
+const S = L.newGame({ code: 'TEST', teacherUid: 't' });
+for (const [uid, team] of [['a', 'voc'], ['b', 'esp'], ['c', 'zheng'], ['d', 'jpn'], ['e', 'minnan']]) {
+  assert.ok(L.applyAction(S, { type: 'join', uid, name: uid, team }).ok);
+}
+assert.equal(S.teams.voc.port, '長崎', '荷蘭從平戶商館出發');
+assert.equal(S.teams.zheng.port, '長崎');
+assert.equal(S.teams.minnan.port, '月港');
+assert.equal(S.teams.voc.cargo['胡椒'], 1);
+assert.deepEqual(S.secret.eventOrder, [1, 2, 3, 4, 5, 6]);
 assert.ok(L.startGame(S).ok);
-assert.equal(S.room.round, 1);
-assert.equal(S.hands.minnan.cards.length, 2, '閩南多抽一張');
-assert.equal(S.hands.jpn.cards.length, 1);
-assert.equal(S.teams.esp.cargo['白銀'], 1);
-// 手牌不應洩漏真假
-for (const id of TEAM_IDS) for (const c of S.hands[id].cards) assert.ok(!('kind' in c));
+assert.equal(S.hands.minnan.cards.length, 2, '閩南多抽 1 張');
 
-// 交易：非交易階段不能買
-assert.equal(L.applyAction(S, { type: 'buy', uid: 'u2', good: '生絲', qty: 1 }).ok, false);
-L.advance(S); L.advance(S); assert.equal(S.room.phase, 'trade');
-// 鄭氏在月港買 3 箱生絲：2+3+4
-r = L.applyAction(S, { type: 'buy', uid: 'u2', good: '生絲', qty: 3 });
-assert.ok(r.ok, r.msg); assert.equal(S.teams.zheng.silver, 1); assert.equal(S.room.prices['月港']['生絲'], 5);
-// 荷蘭在大員買鹿皮不漲價
-L.applyAction(S, { type: 'buy', uid: 'u0', good: '鹿皮', qty: 2 });
-assert.equal(S.room.prices['大員']['鹿皮'], 2); assert.equal(S.teams.voc.silver, 6);
-// 日本在長崎賣白銀前先買：price 2 -> 付 1
-L.applyAction(S, { type: 'buy', uid: 'u3', good: '白銀', qty: 1 });
-assert.equal(S.teams.jpn.silver, 9);
-// 交換提議：同港才可換貨
-const off = L.applyAction(S, { type: 'offer', uid: 'u0', to: 'esp', give: { silver: 2 }, want: { cargo: { 白銀: 1 } } });
-assert.ok(off.ok);
-r = L.respondOffer(S, 'esp', { accept: true, offer: off.offer });
-assert.equal(r.ok, false, '不同港不能換貨');
-const off2 = L.applyAction(S, { type: 'offer', uid: 'u0', to: 'esp', give: { silver: 2, cards: [S.hands.voc.cards[0].cid] }, want: {} });
-r = L.respondOffer(S, 'esp', { accept: true, offer: off2.offer });
-assert.ok(r.ok, r.msg); assert.equal(S.teams.esp.silver, 12); assert.equal(S.hands.esp.cards.length, 2);
+const go = (phase) => { while (S.room.phase !== phase) assert.ok(L.advance(S).ok); };
 
-L.advance(S); assert.equal(S.room.phase, 'orders');
-// 鄭氏冬季從月港往長崎：不行；往澎湖可以
-assert.equal(L.applyAction(S, { type: 'order', uid: 'u2', dest: '長崎' }).ok, false);
-assert.ok(L.applyAction(S, { type: 'order', uid: 'u2', dest: '澎湖' }).ok);
-// 日本往雞籠（冬南順風）並押長崎生絲漲（第 1 回合事件 2）
-r = L.applyAction(S, { type: 'order', uid: 'u3', dest: '雞籠', bet: { port: '長崎', good: '生絲', dir: 'up', amt: 3 } });
-assert.ok(r.ok, r.msg); assert.equal(S.teams.jpn.silver, 6);
-// 西班牙往大員北上（冬季逆風 2 回合）
-assert.ok(L.applyAction(S, { type: 'order', uid: 'u1', dest: '大員' }).ok);
-L.advance(S); assert.equal(S.room.phase, 'resolve');
-assert.equal(S.teams.zheng.port, '澎湖');
-assert.equal(S.teams.jpn.port, '雞籠');
-assert.equal(S.teams.jpn.silver, 12, '猜中拿回兩倍');
-assert.equal(S.teams.jpn.rep, 1);
-assert.ok(S.teams.esp.sea && S.teams.esp.sea.arrive === 2);
-assert.equal(S.room.prices['長崎']['生絲'], 10, '先回穩再 +3');
-assert.equal(S.room.prices['月港']['生絲'], 4, '月港生絲 5 回穩為 4');
-console.log('report', S.room.lastReport.lines);
+// 第 1 回合
+go('trade');
+S.teams.zheng.silver = 60; S.teams.minnan.silver = 40;
+assert.ok(L.applyAction(S, { type: 'buy', uid: 'a', good: '白銀', qty: 1 }).ok, '荷蘭在長崎可交易');
+assert.ok(L.applyAction(S, { type: 'buy', uid: 'c', good: '白銀', qty: 4 }).ok);
+assert.ok(L.applyAction(S, { type: 'buy', uid: 'c', good: '白銀', qty: 1 }).ok, '鄭芝龍集團第 5 箱');
+assert.equal(L.cargoCount(S.teams.zheng), 5);
+assert.ok(L.applyAction(S, { type: 'buy', uid: 'e', good: '生絲', qty: 4 }).ok);
+assert.equal(L.applyAction(S, { type: 'buy', uid: 'e', good: '瓷器', qty: 1 }).ok, false, '閩南只能裝 4 箱');
 
-// 跑完 6 回合
-for (let k = 0; k < 40 && S.room.status !== 'ended'; k++) L.advance(S);
+go('orders');
+assert.equal(L.applyAction(S, { type: 'order', uid: 'a', dest: '澎湖' }).ok, false, '澎湖未開港');
+assert.ok(L.applyAction(S, { type: 'order', uid: 'c', dest: '月港', bet: { port: '馬尼拉', good: '生絲', dir: 'up', amt: 2 } }).ok);
+assert.ok(L.applyAction(S, { type: 'order', uid: 'd', dest: '馬尼拉' }).ok);
+go('resolve');
+// 事件 1（1622）：荷蘭集結澎湖、馬尼拉生絲上漲、下注猜中
+assert.equal(S.teams.voc.port, '澎湖');
+assert.ok(S.room.prices['馬尼拉']['生絲'] > BASE_PRICES['馬尼拉']['生絲']);
+assert.equal(S.teams.zheng.rep, 1, '猜中馬尼拉生絲漲');
+assert.ok(S.teams.zheng.sea && S.teams.zheng.sea.to === '月港');
+assert.match(S.room.lastReport.title, /1622/);
+
+// 第 2 回合（1622–1623）：荷蘭在澎湖交易；西班牙還能前往長崎
+assert.ok(L.advance(S).ok);
+go('trade');
+assert.ok(L.applyAction(S, { type: 'buy', uid: 'a', good: '生絲', qty: 1 }).ok, '荷蘭在澎湖可交易');
+go('orders');
+assert.ok(L.applyAction(S, { type: 'order', uid: 'b', dest: '長崎' }).ok);
+go('resolve');
+assert.equal(S.teams.voc.port, '大員', '1624 荷蘭轉往大員');
+assert.equal(S.teams.zheng.port, '月港');
+assert.ok(S.teams.esp.sea);
+
+// 第 3 回合（1624–1625）：鄭芝龍集團在月港賣白銀
+assert.ok(L.advance(S).ok);
+go('trade');
+assert.ok(L.applyAction(S, { type: 'sell', uid: 'c', good: '白銀', qty: 2 }).ok, '在月港賣白銀');
+go('resolve');
+assert.equal(S.teams.esp.port, '長崎');
+assert.ok(L.advance(S).ok);
+go('trade');
+assert.equal(L.applyAction(S, { type: 'buy', uid: 'b', good: '白銀', qty: 1 }).ok, false, '1624 後西班牙不能在長崎交易');
+
+// 走完全局；第 6 事件：日本朱印船若在海外會失去貨
+for (let i = 0; i < 40 && S.room.status !== 'ended'; i++) L.advance(S);
 assert.equal(S.room.status, 'ended');
 assert.equal(S.room.reports.length, 6);
-const rk = L.ranking(S);
-assert.equal(rk.length, 5);
-for (const p of PORTS) for (const g of GOODS) assert.ok(S.room.prices[p][g] >= 1 && S.room.prices[p][g] <= 12);
-console.log(rk);
+assert.deepEqual(S.room.reports.map((r) => r.ev), [1, 2, 3, 4, 5, 6]);
+assert.match(S.room.reports[5].title, /1635/);
+assert.ok(PORT_OPEN['雞籠'] === 4);
 console.log('ALL TESTS PASSED');
