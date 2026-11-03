@@ -1,0 +1,55 @@
+rules_version = '2';
+// 《航海通商》Firestore 安全規則
+// 老師端是唯一能改遊戲狀態的人；學生只能送出動作、發訊息，
+// 並且只能讀到自己這組的情報卡與私訊。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function room(code) { return get(/databases/$(database)/documents/rooms/$(code)).data; }
+    function isTeacher(code) { return signedIn() && room(code).teacherUid == request.auth.uid; }
+    function inTeam(code, team) {
+      return signedIn() && team is string && team.size() > 0 && team.size() < 10
+        && exists(/databases/$(database)/documents/rooms/$(code)/teams/$(team))
+        && request.auth.uid in get(/databases/$(database)/documents/rooms/$(code)/teams/$(team)).data.members;
+    }
+
+    match /rooms/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.teacherUid == request.auth.uid;
+      allow update, delete: if isTeacher(code);
+
+      match /teams/{team} {
+        allow read: if signedIn();
+        allow write: if isTeacher(code);
+      }
+      match /hands/{team} {
+        allow read: if isTeacher(code) || inTeam(code, team);
+        allow write: if isTeacher(code);
+      }
+      match /secret/{doc} {
+        allow read, write: if isTeacher(code);
+      }
+      match /actions/{id} {
+        allow read: if isTeacher(code) || (signedIn() && resource.data.uid == request.auth.uid);
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.status == 'pending';
+        allow update, delete: if isTeacher(code);
+      }
+      match /offers/{id} {
+        allow read: if isTeacher(code) || inTeam(code, resource.data.from) || inTeam(code, resource.data.to);
+        allow write: if isTeacher(code);
+      }
+      match /messages/{id} {
+        allow read: if isTeacher(code) || resource.data.to == 'all'
+          || inTeam(code, resource.data.to) || inTeam(code, resource.data.from);
+        allow create: if isTeacher(code) || (
+          request.resource.data.uid == request.auth.uid
+          && inTeam(code, request.resource.data.from)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 200);
+        allow update, delete: if isTeacher(code);
+      }
+    }
+  }
+}
