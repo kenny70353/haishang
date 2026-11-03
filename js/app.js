@@ -1,12 +1,12 @@
-import { firebaseConfig, allowGuest } from './firebase-config.js';
-import { createMemoryBackend } from './backend-memory.js';
-import { Host } from './host.js';
-import * as L from './logic.js';
-import { chartSvg, layoutChart } from './chart.js';
+import { firebaseConfig, allowGuest } from './firebase-config.js?v=20261103h';
+import { createMemoryBackend } from './backend-memory.js?v=20261103h';
+import { Host } from './host.js?v=20261103h';
+import * as L from './logic.js?v=20261103h';
+import { chartSvg, layoutChart } from './chart.js?v=20261103h';
 import {
   PORTS, GOODS, POS, ROUTES, TEAMS, TEAM_IDS, HOLD, ROUNDS, PHASES, PHASE_NAME, PHASE_HINT,
   EVENTS, RECOMMENDED_ORDER, BASE_PRICES, ERAS, PORT_NOTE, OPEN_YEAR, PORT_OPEN,
-} from './data.js';
+} from './data.js?v=20261103h';
 
 // ================= 工具 =================
 const $ = (s, el = document) => el.querySelector(s);
@@ -57,7 +57,7 @@ function clearSubs() { U.subs.forEach((u) => { try { u(); } catch { /* 已取消
 async function boot() {
   if (!configured || params.has('demo')) return startDemo();
   try {
-    const { createFirebaseBackend } = await import('./backend-firebase.js');
+    const { createFirebaseBackend } = await import('./backend-firebase.js?v=20261103h');
     U.backend = await createFirebaseBackend(firebaseConfig);
   } catch (e) {
     console.error(e);

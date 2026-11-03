@@ -1,5 +1,5 @@
 // 《航海通商》海圖：東亞海域地形、航線、港口與各勢力船隻（含航行動畫）
-import { PORTS, ROUTES, TEAMS } from './data.js';
+import { PORTS, ROUTES, TEAMS } from './data.js?v=20261103h';
 
 // ---------- 投影 ----------
 // 以臺灣海峽為中心的「魚眼」投影：海峽附近放大約 3 倍，長崎、馬尼拉等遠端維持在畫面內。
