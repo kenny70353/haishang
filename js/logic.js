@@ -3,7 +3,7 @@
 import {
   PORTS, GOODS, LAT, BASE_PRICES, ROUTES, TEAMS, TEAM_IDS, START_SILVER, HOLD, ROUNDS,
   PHASES, EVENTS, INTEL, PORT_OPEN, OPEN_YEAR, gibberish,
-} from './data.js?v=20261103w';
+} from './data.js?v=20261103x';
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 export const PRICE_MAX = 12;

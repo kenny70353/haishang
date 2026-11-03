@@ -1,6 +1,6 @@
 // 《航海通商》海圖：東亞海域地形、航線、港口與各勢力船隻（含航行動畫）
-import { PORTS, ROUTES, TEAMS } from './data.js?v=20261103w';
-import { LAND_D as LAND_REAL } from './chart-land.js?v=20261103w';
+import { PORTS, ROUTES, TEAMS } from './data.js?v=20261103x';
+import { LAND_D as LAND_REAL } from './chart-land.js?v=20261103x';
 
 // ---------- 投影 ----------
 // 以臺灣海峽為中心的「魚眼」投影：海峽附近放大約 3 倍，長崎、馬尼拉等遠端維持在畫面內。
@@ -89,7 +89,7 @@ const WAY = {
 const LABELS = [
   ['大明', 116.7, 27.4, 'land big'], ['臺灣', 121.0, 23.9, 'land'], ['呂宋', 121.1, 16.6, 'land'], ['日本', 132.4, 33.7, 'land sm'],
   ['琉球', 128.1, 27.3, 'land sm'], ['朝鮮', 127.5, 34.5, 'land sm'],
-  ['臺灣海峽', 117.6, 22.3, 'sea'], ['南海', 116.0, 17.0, 'sea big'], ['東海', 123.4, 27.4, 'sea'], ['太平洋', 127.6, 19.0, 'sea big'],
+  ['臺灣海峽', 117.6, 22.3, 'sea'], ['南海', 116.0, 17.0, 'sea big'], ['東海', 123.4, 27.4, 'sea'], ['太平洋', 128.3, 17.4, 'sea big'],
 ];
 
 // 預先計算：陸地路徑、港口座標、航線點列
@@ -170,6 +170,7 @@ function shipArt(id) {
 }
 function shipSvg(id, mine) {
   return `<g class="ship-g" data-ship="${id}" transform="translate(-50 -50)">
+    <ellipse class="ship-sh" cx=".4" cy="2.1" rx="4.3" ry="1" filter="url(#soft)"/>
     ${mine ? '<ellipse class="me-ring" cx="0" cy="1.6" rx="6.2" ry="2.2"/>' : ''}
     <g class="bob" style="animation-delay:-${(id.length * 0.37) % 2}s"><g class="flip" transform="scale(.62)">
       <path class="wake" d="M-7 3.2q1.6-.9 3.2 0t3.2 0t3.2 0"/>${shipArt(id)}</g></g>
@@ -210,8 +211,8 @@ export function chartSvg(opts) {
     const sx = r1(lx + (wlab - sw) / 2), sy = r1(ly - 0.2);
     return `<g class="${cls}" data-act="port" data-v="${p}" role="button" tabindex="0" aria-label="${p}${closed ? '（' + closed + '）' : ''}">
       <circle class="hit" cx="${x}" cy="${y}" r="5.5"/>
-      <circle class="pin" cx="${x}" cy="${y}" r="1"/>
-      <rect class="seal-bg" x="${sx}" y="${sy}" width="${r1(sw)}" height="${sh}" rx=".5"/>
+      <circle class="pin-ring" cx="${x}" cy="${y}" r="1.5"/><circle class="pin" cx="${x}" cy="${y}" r=".75"/>
+      <rect class="seal-bg" filter="url(#stamp)" x="${sx}" y="${sy}" width="${r1(sw)}" height="${sh}" rx=".5"/>
       <rect class="seal-rim" x="${r1(sx + .55)}" y="${r1(sy + .55)}" width="${r1(sw - 1.1)}" height="${sh - 1.1}" rx=".3"/>
       <text class="pname" x="${r1(lx + wlab / 2)}" y="${r1(ly + 3.5)}" text-anchor="middle">${p}</text>
       ${hint ? `<text class="phint" x="${r1(lx + wlab / 2)}" y="${r1(ly + 7.9)}" text-anchor="middle">${hint}</text>` : ''}
@@ -232,34 +233,79 @@ export function chartSvg(opts) {
     const d = winter ? 'M0 0q-1.6 .2 -3.4 3.4' : 'M0 0q1.6 -.2 3.4 -3.4';
     gusts.push(`<path class="gust ${winter ? 'w' : 's'}" d="${d}" transform="translate(${r1(x)} ${r1(y)})" style="animation-delay:${(i * 0.53) % 4}s"/>`);
   });
-  const [cx, cy] = proj(128.6, 21.6);
+  const [cx, cy] = proj(127.4, 21.0);
+  // 羅經線：自羅盤向外放射 16 方位（仿 17 世紀海圖）
+  const rhumb = Array.from({ length: 16 }, (_, i) => {
+    const a = (i * Math.PI) / 8, L = 160;
+    return `<path class="rh ${i % 4 === 0 ? 'rh-main' : ''}" d="M${r1(cx)} ${r1(cy)}L${r1(cx + Math.sin(a) * L)} ${r1(cy - Math.cos(a) * L)}"/>`;
+  }).join('');
+  // 羅盤：16 方位星芒＋24 向刻度
+  const pt = (ang, len, wid, cls) => {
+    const s1 = Math.sin(ang), c1 = Math.cos(ang), sx = Math.cos(ang) * wid, sy = Math.sin(ang) * wid;
+    const tx = s1 * len, ty = -c1 * len;
+    return `<path class="${cls} a" d="M0 0L${r1(tx * 10) / 10} ${r1(ty * 10) / 10}L${r1(sx * 10) / 10} ${r1(sy * 10) / 10}Z"/><path class="${cls} b" d="M0 0L${r1(tx * 10) / 10} ${r1(ty * 10) / 10}L${r1(-sx * 10) / 10} ${r1(-sy * 10) / 10}Z"/>`;
+  };
+  let rose = '';
+  for (let i = 0; i < 16; i++) { const ang = (i * Math.PI) / 8; if (i % 4 === 2) rose += pt(ang, 4.2, .8, 'p2'); else if (i % 2 === 1) rose += pt(ang, 3.2, .5, 'p3'); }
+  for (let i = 0; i < 4; i++) rose += pt((i * Math.PI) / 2, 6.4, 1.1, i === 0 ? 'p1n' : 'p1');
+  const ticks = Array.from({ length: 24 }, (_, i) => { const a = (i * Math.PI) / 12; return `M${r1(Math.sin(a) * 6.9 * 10) / 10} ${r1(-Math.cos(a) * 6.9 * 10) / 10}L${r1(Math.sin(a) * 7.6 * 10) / 10} ${r1(-Math.cos(a) * 7.6 * 10) / 10}`; }).join('');
+  // 圖框刻度（黑白相間的經緯尺）
+  const F = 2.4, ticksFrame = [];
+  for (let x = F, k = 0; x < W - F; x += 5, k++) if (k % 2 === 0) { const w = Math.min(5, W - F - x); ticksFrame.push(`<rect x="${r1(x)}" y="1" width="${r1(w)}" height="${F - 1}"/><rect x="${r1(x)}" y="${H - F}" width="${r1(w)}" height="${F - 1}"/>`); }
+  for (let y = F, k = 0; y < H - F; y += 5, k++) if (k % 2 === 0) { const h = Math.min(5, H - F - y); ticksFrame.push(`<rect x="1" y="${r1(y)}" width="${F - 1}" height="${r1(h)}"/><rect x="${W - F}" y="${r1(y)}" width="${F - 1}" height="${r1(h)}"/>`); }
+  // 海面的手繪浪紋
+  const waveAt = [[126.5, 24.5], [127.8, 18.5], [115.8, 19.5], [118.2, 16.2], [124.5, 20.5], [129.5, 28.5], [123.8, 30.8], [116.4, 21.3], [125.6, 15.0], [130.5, 22.5]];
+  const waves = waveAt.map(([lo, la]) => { const [x, y] = proj(lo, la); return `<path class="wave" transform="translate(${r1(x)} ${r1(y)})" d="M-3 0q.75-.9 1.5 0t1.5 0t1.5 0t1.5 0M-1.5 1.3q.75-.9 1.5 0t1.5 0"/>`; }).join('');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="東亞海圖：港口、航線與各勢力船隻">
     <defs>
-      <radialGradient id="seaG" cx="30%" cy="45%" r="85%"><stop offset="0" stop-color="var(--sea-a)"/><stop offset="1" stop-color="var(--sea-b)"/></radialGradient>
-      <pattern id="wavesP" width="6" height="4" patternUnits="userSpaceOnUse"><path d="M0 2q.75-1 1.5 0t1.5 0" class="wv"/><path d="M3 4q.75-1 1.5 0t1.5 0" class="wv"/><path d="M3 0q.75-1 1.5 0t1.5 0" class="wv"/></pattern>
-      <filter id="landSh" x="-5%" y="-5%" width="110%" height="110%"><feDropShadow dx=".4" dy=".6" stdDeviation=".5" flood-opacity=".25"/></filter>
+      <radialGradient id="seaG" cx="48%" cy="46%" r="70%"><stop offset="0" stop-color="#f4ead0"/><stop offset=".7" stop-color="#eadcb5"/><stop offset="1" stop-color="#d9c596"/></radialGradient>
+      <linearGradient id="landG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8d5a6"/><stop offset="1" stop-color="#d9c08a"/></linearGradient>
+      <pattern id="hatch" width="1.3" height="1.3" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><path d="M0 0V1.3" stroke="#7a5f36" stroke-width=".14"/></pattern>
+      <clipPath id="landClip"><path d="${LAND_D}"/></clipPath>
+      <clipPath id="frameClip"><rect x="${F}" y="${F}" width="${W - 2 * F}" height="${H - 2 * F}"/></clipPath>
+      <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .35  0 0 0 0 .26  0 0 0 0 .12  0 0 0 -.9 .62"/></filter>
+      <filter id="stamp" x="-10%" y="-20%" width="120%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="2.2" numOctaves="1" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale=".45"/></filter>
+      <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation=".45"/></filter>
     </defs>
-    <rect width="${W}" height="${H}" fill="url(#seaG)"/>
-    <g class="gusts">${gusts.join('')}</g>
-    <path class="wl w3" d="${LAND_D}"/><path class="wl w2" d="${LAND_D}"/><path class="wl w1" d="${LAND_D}"/>
-    <path class="land" d="${LAND_D}"/>
-    ${labels}
-    <path class="ext" d="${bat}"/><path class="ext" d="${aca}"/>
-    <text class="extl" x="${r1(proj(114.4, 10.7)[0])}" y="${r1(proj(114.4, 10.7)[1])}">↙ 往巴達維亞・歐洲</text>
-    <text class="extl" x="${W - 1.5}" y="${r1(proj(132.5, 13.4)[1] - 2)}" text-anchor="end">往阿卡普科・美洲 →</text>
-    <g class="lanes">${routes}</g>
-    ${ports}
-    <g class="compass" transform="translate(${r1(cx)} ${r1(cy)})">
-      <circle r="6.2" class="cmp-ring"/><circle r="5.2" class="cmp-ring"/>
-      <path class="cmp-ray" d="M0 -6.2V6.2M-6.2 0H6.2M-4.4 -4.4L4.4 4.4M4.4 -4.4L-4.4 4.4"/>
-      <path d="M0 -5.2L.9 0L0 5.2L-.9 0Z" class="cmp-ns"/><path d="M-5.2 0L0 -.7L5.2 0L0 .7Z" class="cmp-ew"/>
-      <text y="-7.1" text-anchor="middle" class="cmp-t">子</text><text y="9" text-anchor="middle" class="cmp-t">午</text>
-      <text x="8" y=".9" text-anchor="middle" class="cmp-t">卯</text><text x="-8" y=".9" text-anchor="middle" class="cmp-t">酉</text></g>
-    <g class="ships">${ships}</g>
-    <g class="season" transform="translate(2.5 2.5)"><rect width="25.5" height="9" rx=".6" class="season-bg"/><rect x=".7" y=".7" width="24.1" height="7.6" rx=".3" class="season-rim"/>
-      <path transform="translate(4.5 4.5) rotate(${winter ? 225 : 45})" d="M-2.6 0H2.2M.6 -1.6L2.4 0L.6 1.6" class="season-ar"/>
-      <text x="9" y="3.9" class="season-t">${winter ? '冬・東北季風' : '夏・西南季風'}</text>
-      <text x="9" y="7.4" class="season-s">${winter ? '往南順風' : '往北順風'}</text></g>
+    <rect width="${W}" height="${H}" fill="#ead9ad"/>
+    <g clip-path="url(#frameClip)">
+      <rect width="${W}" height="${H}" fill="url(#seaG)"/>
+      <g class="rhumbs">${rhumb}</g>
+      ${waves}
+      <g class="gusts">${gusts.join('')}</g>
+      <path class="wl w3" d="${LAND_D}"/><path class="wl w2" d="${LAND_D}"/><path class="wl w1" d="${LAND_D}"/>
+      <path class="land" d="${LAND_D}" fill="url(#landG)"/>
+      <g clip-path="url(#landClip)"><path class="land-edge" d="${LAND_D}"/><rect width="${W}" height="${H}" fill="url(#hatch)" class="land-hatch"/></g>
+      <path class="land-line" d="${LAND_D}"/>
+      ${labels}
+      <path class="ext" d="${bat}"/><path class="ext" d="${aca}"/>
+      <text class="extl" x="${r1(proj(114.4, 11.6)[0])}" y="${r1(proj(114.4, 11.6)[1])}">↙ 往巴達維亞・歐洲</text>
+      <text class="extl" x="${W - F - 1.5}" y="${r1(proj(132.5, 13.4)[1] - 2)}" text-anchor="end">往阿卡普科・美洲 →</text>
+      <rect width="${W}" height="${H}" filter="url(#grain)" class="grain"/>
+      <g class="lanes">${routes}</g>
+      <g class="compass" transform="translate(${r1(cx)} ${r1(cy)})">
+        <circle r="8.6" class="cmp-disc"/><circle r="7.6" class="cmp-ring"/><circle r="6.9" class="cmp-ring"/><path class="cmp-tick" d="${ticks}"/>
+        ${rose}<circle r=".7" class="cmp-hub"/>
+        <text y="-9.6" text-anchor="middle" class="cmp-t">子</text><text y="11.4" text-anchor="middle" class="cmp-t">午</text>
+        <text x="10.6" y=".9" text-anchor="middle" class="cmp-t">卯</text><text x="-10.6" y=".9" text-anchor="middle" class="cmp-t">酉</text></g>
+      ${ports}
+      <g class="ships">${ships}</g>
+    </g>
+    <g class="frame">
+      <rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" class="fr-out"/>
+      <g class="fr-tick">${ticksFrame.join('')}</g>
+      <rect x="1" y="1" width="${W - 2}" height="${H - 2}" class="fr-in"/>
+      <rect x="${F}" y="${F}" width="${W - 2 * F}" height="${H - 2 * F}" class="fr-in"/>
+    </g>
+    <g class="cartouche" transform="translate(${F + 2} ${F + 2})">
+      <rect width="29" height="15.5" class="ct-bg"/><rect x=".8" y=".8" width="27.4" height="13.9" class="ct-rim"/>
+      <path class="ct-corner" d="M.8 3.2V.8H3.2M25.8 .8H28.2V3.2M28.2 12.3V14.7H25.8M3.2 14.7H.8V12.3"/>
+      <text x="14.5" y="5.6" text-anchor="middle" class="ct-title">東西洋航海圖</text>
+      <path d="M4 7.4H25" class="ct-rule"/>
+      <path transform="translate(6 11) rotate(${winter ? 225 : 45})" d="M-2.2 0H1.9M.5 -1.4L2.1 0L.5 1.4" class="season-ar"/>
+      <text x="10" y="10.4" class="season-t">${winter ? '冬・東北季風' : '夏・西南季風'}</text>
+      <text x="10" y="13.3" class="season-s">${winter ? '往南的航線順風' : '往北的航線順風'}</text>
+    </g>
   </svg>`;
 }
 

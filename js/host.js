@@ -1,6 +1,6 @@
 // 老師端主機：保存完整遊戲狀態、依序處理學生送來的動作，並寫回資料庫
-import * as L from './logic.js?v=20261103w';
-import { TEAM_IDS, TEAMS, EVENTS, PHASE_NAME } from './data.js?v=20261103w';
+import * as L from './logic.js?v=20261103x';
+import { TEAM_IDS, TEAMS, EVENTS, PHASE_NAME } from './data.js?v=20261103x';
 
 const PUBLIC_TEAM_KEYS = ['id', 'name', 'members', 'silver', 'cargo', 'port', 'sea', 'rep', 'zhengUsed', 'review'];
 

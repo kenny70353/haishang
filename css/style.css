@@ -346,3 +346,40 @@ table.tbl { border-collapse: collapse; width: 100%; font-variant-numeric: tabula
 .fleet-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .82rem; color: var(--ink-2); margin-top: 8px; padding: 0 6px; }
 .fleet-key span { display: inline-flex; align-items: center; gap: 5px; }
 .fleet-key i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* ---------- 海圖細節（精緻版） ---------- */
+.chart { border: 0; box-shadow: 0 1px 0 rgba(0,0,0,.15); background: #ead9ad; }
+.chart .land { stroke: none; }
+.chart .land-edge { fill: none; stroke: #b8945a; stroke-width: 1.6; opacity: .45; }
+.chart .land-hatch { opacity: .28; }
+.chart .land-line { fill: none; stroke: #4e3c22; stroke-width: .32; stroke-linejoin: round; }
+.chart .wl { stroke: #6a7b7c; }
+.chart .rh { stroke: #5a4627; stroke-width: .1; opacity: .28; }
+.chart .rh-main { stroke: #b0362a; stroke-width: .14; opacity: .35; }
+.chart .wave { fill: none; stroke: #5d7280; stroke-width: .22; stroke-linecap: round; opacity: .55; }
+.chart .grain { pointer-events: none; mix-blend-mode: multiply; opacity: .55; }
+.chart .fr-out { fill: none; stroke: #3d3020; stroke-width: .5; }
+.chart .fr-in { fill: none; stroke: #3d3020; stroke-width: .25; }
+.chart .fr-tick rect { fill: #3d3020; }
+.chart .cmp-disc { fill: rgba(243,232,204,.75); stroke: none; }
+.chart .cmp-ring { fill: none; stroke: #4e3c22; stroke-width: .2; }
+.chart .cmp-tick { stroke: #4e3c22; stroke-width: .16; }
+.chart .p1.a { fill: #3d3020; } .chart .p1.b { fill: #efe2c0; stroke: #3d3020; stroke-width: .12; }
+.chart .p1n.a { fill: #b0362a; } .chart .p1n.b { fill: #e9b5a6; stroke: #b0362a; stroke-width: .12; }
+.chart .p2.a { fill: #6b5a3c; } .chart .p2.b { fill: #f3e8cc; stroke: #6b5a3c; stroke-width: .1; }
+.chart .p3.a, .chart .p3.b { fill: #b0362a; opacity: .7; }
+.chart .cmp-hub { fill: #f3e8cc; stroke: #3d3020; stroke-width: .15; }
+.chart .cmp-t { font-size: 2.6px; }
+.chart .ct-bg { fill: #f4ead0; stroke: #3d3020; stroke-width: .35; }
+.chart .ct-rim { fill: none; stroke: #3d3020; stroke-width: .15; }
+.chart .ct-corner { fill: none; stroke: #b0362a; stroke-width: .35; }
+.chart .ct-title { font-family: var(--kai); font-weight: 700; font-size: 3.6px; fill: #2a241b; letter-spacing: .5px; }
+.chart .ct-rule { stroke: #3d3020; stroke-width: .12; }
+.chart .season-t { font-size: 2.5px; }
+.chart .season-s { font-size: 1.9px; }
+.chart .ship-sh { fill: rgba(40,30,15,.28); }
+.chart .pin-ring { fill: #f4ead0; stroke: #2a241b; stroke-width: .25; }
+.chart .port.shut .pin-ring { stroke: #8d7d5e; }
+.chart .port.dest .pin-ring { stroke: #b0362a; }
+.chart .lbl.land.big { fill: #4a3920; opacity: .85; }
+.chart .lbl.sea { font-style: normal; }
