@@ -7,6 +7,7 @@
   --line: #dccfb4;
   --sea: #d6e5ee;
   --sea-2: #b9d1df;
+  --sea-a: #cfe3ec; --sea-b: #7fa9c2; --land-a: #efe0bd; --land-b: #8a6a3a; --shoal: #e7f1f3;
   --seal: #b8432f;
   --gold: #b9852a;
   --good: #2f7d4f;
@@ -24,6 +25,7 @@
     --line: #2b3d52; --sea: #13283b; --sea-2: #1d3a54; --seal: #e06a52; --gold: #d9a646;
     --good: #5fbf86; --warn: #e0a640; --bad: #e06a52; --shadow: 0 1px 0 rgba(0,0,0,.3), 0 8px 20px rgba(0,0,0,.35);
     --bar: #0a131d; --bar-fg: #e8eef5; --on-ink: #0f1b28; color-scheme: dark;
+    --sea-a: #1d4560; --sea-b: #0b1c2c; --land-a: #5b5038; --land-b: #c9b48a; --shoal: #2a5a78;
   }
 }
 :root[data-theme="dark"] {
@@ -31,6 +33,7 @@
     --line: #2b3d52; --sea: #13283b; --sea-2: #1d3a54; --seal: #e06a52; --gold: #d9a646;
     --good: #5fbf86; --warn: #e0a640; --bad: #e06a52; --shadow: 0 1px 0 rgba(0,0,0,.3), 0 8px 20px rgba(0,0,0,.35);
     --bar: #0a131d; --bar-fg: #e8eef5; --on-ink: #0f1b28; color-scheme: dark;
+    --sea-a: #1d4560; --sea-b: #0b1c2c; --land-a: #5b5038; --land-b: #c9b48a; --shoal: #2a5a78;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -219,3 +222,76 @@ table.tbl { border-collapse: collapse; width: 100%; font-variant-numeric: tabula
 .modal-box p { margin-top: 0; }
 .btn:focus-visible, .tabs button:focus-visible, .seg button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+
+/* ---------- 海圖（遊戲畫面） ---------- */
+.chart-card { padding: 8px; }
+.chart { width: 100%; display: block; border-radius: 10px; aspect-ratio: 110 / 130; max-height: 78vh; margin: 0 auto; user-select: none; -webkit-user-select: none; }
+.chart .wv { fill: none; stroke: rgba(255,255,255,.35); stroke-width: .25; }
+.chart .grat { fill: none; stroke: rgba(22,50,79,.12); stroke-width: .2; stroke-dasharray: .8 .8; }
+.chart .shoal { fill: none; stroke: var(--shoal); stroke-width: 2.2; stroke-linejoin: round; opacity: .8; }
+.chart .land { fill: var(--land-a); stroke: var(--land-b); stroke-width: .35; stroke-linejoin: round; }
+.chart .lbl { font-family: var(--serif); pointer-events: none; }
+.chart .lbl.land { font-size: 3.6px; font-weight: 800; fill: color-mix(in srgb, var(--land-b) 85%, transparent); letter-spacing: .6px; }
+.chart .lbl.land.big { font-size: 5.4px; letter-spacing: 2px; }
+.chart .lbl.land.sm { font-size: 2.8px; }
+.chart .lbl.sea { font-size: 2.9px; font-style: italic; fill: rgba(255,255,255,.75); letter-spacing: 1.2px; }
+.chart .lbl.sea.big { font-size: 4px; letter-spacing: 2.4px; }
+.chart .ext { fill: none; stroke: rgba(255,255,255,.65); stroke-width: .35; stroke-dasharray: .6 1.1; }
+.chart .extl { font-size: 2.5px; fill: rgba(255,255,255,.9); font-weight: 700; }
+.chart .lane { fill: none; stroke: rgba(22,50,79,.38); stroke-width: .55; stroke-dasharray: 1.6 1.2; stroke-linecap: round; }
+.chart .lane.long { stroke-dasharray: .6 1.4; }
+.chart .lane.r1 { stroke: var(--good); stroke-width: 1.1; stroke-dasharray: none; }
+.chart .lane.r2 { stroke: var(--warn); stroke-width: 1.1; stroke-dasharray: 2 1.2; }
+.chart .lane.rx { stroke: rgba(107,123,140,.7); stroke-width: .5; stroke-dasharray: .5 1.2; }
+.chart .lane.sel { stroke: var(--seal); stroke-width: 1.6; stroke-dasharray: 2.2 1.2; animation: march 1.2s linear infinite; }
+@keyframes march { to { stroke-dashoffset: -3.4; } }
+.chart .port { cursor: pointer; }
+.chart .port .hit { fill: transparent; }
+.chart .port .halo { fill: var(--card); stroke: var(--ink); stroke-width: .45; }
+.chart .port .fort { fill: var(--ink); }
+.chart .port .plate { fill: var(--card); stroke: var(--ink); stroke-width: .3; opacity: .95; }
+.chart .port .pname { font-family: var(--serif); font-weight: 800; font-size: 3.3px; fill: var(--ink); }
+.chart .port .phint { font-size: 2.4px; font-weight: 700; fill: #fff; paint-order: stroke; stroke: rgba(22,50,79,.85); stroke-width: .7px; }
+.chart .port.mine .halo { fill: var(--seal); stroke: var(--seal); }
+.chart .port.mine .fort { fill: #fff; }
+.chart .port.focus .plate { stroke: var(--seal); stroke-width: .6; }
+.chart .port.dest .halo { fill: var(--gold); stroke: #fff; animation: pulse 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.chart .port.off { opacity: .55; }
+.chart .port:hover .plate, .chart .port:focus-visible .plate { stroke: var(--seal); stroke-width: .7; }
+.chart .port:focus { outline: none; }
+@keyframes pulse { 50% { transform: scale(1.35); } }
+.chart .gust { fill: none; stroke: rgba(255,255,255,.75); stroke-width: .35; stroke-linecap: round; opacity: 0; animation: gustW 4s linear infinite; }
+.chart .gust.s { animation-name: gustS; }
+@keyframes gustW { 0% { opacity: 0; translate: 0 0; } 25% { opacity: .9; } 100% { opacity: 0; translate: -9px 9px; } }
+@keyframes gustS { 0% { opacity: 0; translate: 0 0; } 25% { opacity: .9; } 100% { opacity: 0; translate: 9px -9px; } }
+.chart .compass .cmp-bg { fill: rgba(255,250,240,.55); stroke: rgba(22,50,79,.4); stroke-width: .3; }
+.chart .compass .cmp-ns { fill: var(--seal); } .chart .compass .cmp-ew { fill: rgba(22,50,79,.55); }
+.chart .compass .cmp-t { font-size: 2.6px; font-weight: 800; fill: var(--ink); font-family: var(--serif); }
+.chart .season-bg { fill: var(--card); stroke: var(--line); stroke-width: .3; opacity: .94; }
+.chart .season-ar { fill: none; stroke: var(--seal); stroke-width: .7; stroke-linecap: round; stroke-linejoin: round; }
+.chart .season-t { font-size: 2.6px; font-weight: 800; fill: var(--ink); font-family: var(--serif); }
+.chart .season-s { font-size: 2.1px; fill: var(--muted); }
+.chart .ships { pointer-events: none; }
+.chart .ship-g .bob { animation: bob 2.6s ease-in-out infinite; }
+.chart .ship-g.sailing .bob { animation-duration: 1.1s; }
+@keyframes bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-.45px) rotate(2deg); } }
+.chart .wake { fill: none; stroke: rgba(255,255,255,.85); stroke-width: .5; stroke-linecap: round; }
+.chart .ship-g.sailing .wake { stroke-width: .8; }
+.chart .ship-name { font-size: 2.3px; font-weight: 800; fill: #fff; paint-order: stroke; stroke: rgba(22,50,79,.9); stroke-width: .65px; }
+.chart .ship-name.me { fill: #ffe8a3; }
+.chart .me-ring { fill: rgba(255,214,102,.35); stroke: #ffd666; stroke-width: .35; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chart .lane { stroke: rgba(232,238,245,.35); } :root:not([data-theme="light"]) .chart .grat { stroke: rgba(255,255,255,.08); } }
+:root[data-theme="dark"] .chart .lane { stroke: rgba(232,238,245,.35); }
+:root[data-theme="dark"] .chart .grat { stroke: rgba(255,255,255,.08); }
+@media (prefers-reduced-motion: reduce) { .chart .gust, .chart .ship-g .bob, .chart .lane.sel, .chart .port.dest .halo { animation: none; } .chart .gust { opacity: .5; } }
+@media (min-width: 900px) { .map-grid { grid-template-columns: 1.25fr 1fr; } }
+.pick-hint { margin: 0 0 8px; }
+.goods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.good { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--paper) 60%, var(--card)); font-size: .88rem; min-width: 0; }
+.good b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.good.up b { color: var(--bad); } .good.down b { color: var(--good); }
+.gico { width: 22px; height: 22px; flex: none; vertical-align: middle; }
+.trade-row .g .gico { margin-right: 4px; }
+.fleet { list-style: none; padding: 0; margin: 0; }
+.fleet li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--line); flex-wrap: wrap; }
+.fleet li span:last-child { color: var(--muted); font-size: .88rem; }

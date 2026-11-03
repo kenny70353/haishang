@@ -2,6 +2,7 @@ import { firebaseConfig, allowGuest } from './firebase-config.js';
 import { createMemoryBackend } from './backend-memory.js';
 import { Host } from './host.js';
 import * as L from './logic.js';
+import { chartSvg, layoutChart } from './chart.js';
 import {
   PORTS, GOODS, POS, ROUTES, TEAMS, TEAM_IDS, HOLD, ROUNDS, PHASES, PHASE_NAME, PHASE_HINT,
   EVENTS, RECOMMENDED_ORDER, BASE_PRICES,
@@ -137,7 +138,12 @@ function render() {
   window.scrollTo(0, scroll);
   const m = $('.msgs'); if (m && msgAtBottom) m.scrollTop = m.scrollHeight;
   updateLive();
+  const fleet = U.view === 'teacher' ? U.host?.S.teams : U.view === 'student' ? U.D.teams : null;
+  if (fleet) layoutChart(fleet);
 }
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('.chart [data-act="port"]')) { e.preventDefault(); e.target.closest('[data-act]').dispatchEvent(new MouseEvent('click', { bubbles: true })); }
+});
 document.addEventListener('focusout', () => setTimeout(() => { if (U.pendingRender) render(); }, 0));
 setInterval(updateLive, 1000);
 function updateLive() {
@@ -253,6 +259,7 @@ function viewTeacher() {
               ${r.status === 'playing' ? `<span class="small muted">計時：</span>${[2, 3, 5].map((m) => `<button class="btn sm" data-act="t-timer" data-v="${m * 60}">${m} 分</button>`).join('')}<button class="btn sm ghost" data-act="t-timer" data-v="0">取消</button>` : ''}
             </div>
           </div>
+          ${chartCard(r, S.teams, null, { legend: false, focus: U.portSel })}
           ${r.status === 'lobby' ? viewTeacherLobby(S) : ''}
           ${r.status !== 'lobby' ? `<div class="card"><h2>各組狀況 <small>已完成 ${offers} 筆組間交換</small></h2>
             <div class="tbl-wrap"><table class="tbl"><thead><tr><th>勢力</th><th>位置</th><th>銀兩</th><th>貨艙</th><th>聲望</th><th>指令</th><th>分數</th></tr></thead><tbody>
@@ -407,58 +414,50 @@ function statusStrip(tid) {
 }
 
 // ---------- 海圖 ----------
-function mapSvg(room, teams, mine) {
+function laneClass(room, from) {
+  return (a, b) => {
+    if (!from || (a !== from && b !== from)) return '';
+    const n = L.travelTime(from, a === from ? b : a, room.round || 1, room.flags || {});
+    return n === 1 ? 'r1' : n === 2 ? 'r2' : 'rx';
+  };
+}
+function destHints(room, t) {
+  if (!t || t.sea) return null;
+  const h = { [t.port]: '目前位置' };
+  for (const p of PORTS) {
+    if (p === t.port || !L.routeBetween(t.port, p)) continue;
+    const n = L.travelTime(t.port, p, room.round || 1, room.flags || {});
+    h[p] = n == null ? '這季不能去' : `${n} 回合`;
+  }
+  return h;
+}
+function chartCard(room, teams, mine, { selectable = null, dest = null, focus = null, legend = true } = {}) {
   const me = mine && teams[mine];
   const from = me && !me.sea ? me.port : null;
-  const routes = ROUTES.map(([a, b]) => {
-    const [x1, y1] = POS[a], [x2, y2] = POS[b];
-    let cls = 'route';
-    if (from && (a === from || b === from)) {
-      const to = a === from ? b : a;
-      const turns = L.travelTime(from, to, room.round || 1, room.flags || {});
-      cls += turns === 1 ? ' r1' : turns === 2 ? ' r2' : ' rx';
-    }
-    return `<line class="${cls}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
-  }).join('');
-  const ports = PORTS.map((p) => {
-    const [x, y] = POS[p];
-    const lx = x > 70 ? -3 : 3, anchor = x > 70 ? 'end' : 'start';
-    return `<g class="port ${p === from ? 'mine' : ''}"><circle cx="${x}" cy="${y}" r="2.4"/><text x="${x + lx}" y="${y - 3}" text-anchor="${anchor}">${p}</text></g>`;
-  }).join('');
-  const ids = Object.keys(teams).filter((id) => Object.keys(teams[id].members || {}).length);
-  const byPort = {};
-  const ships = ids.map((id) => {
-    const t = teams[id];
-    let x, y;
-    if (t.sea) {
-      const [x1, y1] = POS[t.sea.from || t.port], [x2, y2] = POS[t.sea.to];
-      x = (x1 + x2) / 2; y = (y1 + y2) / 2;
-    } else {
-      const k = byPort[t.port] = (byPort[t.port] || 0) + 1;
-      [x, y] = POS[t.port]; x += (k - 1) * 3.4 - 2; y += 4.6;
-    }
-    return `<g><title>${esc(t.name)}${t.sea ? '（海上）' : ''}</title><path class="ship" transform="translate(${x} ${y})" d="M-1.9 0 L1.9 0 L1.2 1.2 L-1.2 1.2 Z M0 -2.6 L0 0 L1.6 -.3 Z" fill="${teamColor(id)}"/>${id === mine ? `<circle cx="${x}" cy="${y - .6}" r="3.2" fill="none" stroke="${teamColor(id)}" stroke-width=".5"/>` : ''}</g>`;
-  }).join('');
-  const winter = (room.round || 1) % 2 === 1;
-  return `<svg class="map" viewBox="0 0 100 102" role="img" aria-label="海圖">
-    <path class="land" d="M0 20 Q10 26 14 38 Q12 48 6 56 Q2 64 0 70 Z"/>
-    <path class="land" d="M64 44 Q70 40 72 46 Q70 58 64 70 Q58 74 57 66 Q59 54 64 44 Z"/>
-    <path class="land" d="M78 2 Q88 4 92 10 Q86 16 80 14 Q74 10 78 2 Z"/>
-    <path class="land" d="M52 84 Q60 82 64 88 Q62 98 54 100 Q50 92 52 84 Z"/>
-    ${routes}${ports}${ships}
-    <g transform="translate(88 88)"><circle r="8" fill="var(--card)" opacity=".8"/>
-      <path d="M0 ${winter ? '-5 L0 4' : '5 L0 -4'}" stroke="var(--seal)" stroke-width="1"/><path d="M-1.8 ${winter ? '2 L0 4.6 L1.8 2' : '-2 L0 -4.6 L1.8 -2'}" fill="none" stroke="var(--seal)" stroke-width="1"/>
-      <text class="wind" y="${winter ? -5.6 : 7.8}" text-anchor="middle" dy="${winter ? 0 : 0}">${winter ? '東北季風' : '西南季風'}</text></g>
-  </svg>`;
+  return `<div class="card chart-card">${chartSvg({ round: room.round || 1, teams, mine, dest, focus, selectable, routeClass: laneClass(room, from) })}
+    ${legend ? `<div class="legend">${from ? '<span><i style="border-color:var(--good)"></i>1 回合到</span><span><i style="border-color:var(--warn);border-top-style:dashed"></i>2 回合到</span><span><i style="border-color:var(--muted);border-top-style:dotted"></i>這季不能航行</span>' : ''}<span class="muted">點港口看詳情</span></div>` : ''}</div>`;
+}
+function portInfo(room, teams, tid, p) {
+  const t = teams[tid];
+  const base = (room.base || BASE_PRICES)[p], pr = room.prices?.[p] || base;
+  const here = Object.values(teams).filter((x) => Object.keys(x.members || {}).length && !x.sea && x.port === p);
+  const n = t && !t.sea && t.port !== p && L.routeBetween(t.port, p) ? L.travelTime(t.port, p, room.round || 1, room.flags || {}) : undefined;
+  const canSet = room.status === 'playing' && room.phase === 'orders' && n != null && n !== undefined;
+  const closed = room.flags?.closed && room.flags.closed.round === room.round && room.flags.closed.port === p;
+  return `<div class="card"><h2>${p} <small>${t && !t.sea && t.port === p ? '你在這裡' : n === undefined ? (t?.sea ? '船在海上' : '沒有直達航線') : n == null ? '這季無法從你的港口出航到這裡' : `從${t.port}出發 ${n} 回合`}</small></h2>
+    ${closed ? '<p class="small" style="color:var(--bad)">本回合封港中。</p>' : ''}
+    <div class="goods">${GOODS.map((g) => `<div class="good ${pr[g] > base[g] ? 'up' : pr[g] < base[g] ? 'down' : ''}">${goodIcon(g)}<span>${g}</span><b>${pr[g]}</b></div>`).join('')}</div>
+    <p class="small muted" style="margin:8px 0 0">停在港內：${here.length ? here.map((x) => `<span class="flag" style="display:inline-block;background:${teamColor(x.id)}"></span> ${esc(x.name)}`).join('、') : '沒有船'}</p>
+    ${canSet ? `<button class="btn seal" style="margin-top:10px" data-act="setDest" data-v="${p}">設為下一站</button>` : ''}
+  </div>`;
 }
 function tabMap() {
   const { room, teams } = U.D;
   const tid = myTeamId(), t = teams[tid];
-  const list = t.sea ? `<p>船正在海上，往<b>${t.sea.to}</b>，第 ${t.sea.arrive} 回合結算時抵達。</p>` : routeListHtml(room, t.port);
-  return `<div class="grid2"><div class="card">${mapSvg(room, teams, tid)}
-    <div class="legend"><span><i style="border-color:var(--good)"></i>1 回合到</span><span><i style="border-color:var(--warn);border-top-style:dashed"></i>2 回合到</span><span><i style="border-color:var(--muted);border-top-style:dotted"></i>這季無法航行</span></div></div>
-    <div class="card"><h2>從${t.sea ? '海上' : t.port}出發 <small>${seasonOf(room.round)}季</small></h2>${list}
-      <div class="hr"></div><h3>各船位置</h3><ul class="log">${Object.values(teams).filter((x) => Object.keys(x.members).length).map((x) => `<li><span class="flag" style="display:inline-block;background:${teamColor(x.id)}"></span> ${esc(x.name)}：${x.sea ? `海上，前往${x.sea.to}` : x.port}</li>`).join('')}</ul>
+  const sel = U.portSel && PORTS.includes(U.portSel) ? U.portSel : (t.sea ? t.sea.to : t.port);
+  return `<div class="grid2 map-grid">${chartCard(room, teams, tid, { focus: sel })}
+    <div>${portInfo(room, teams, tid, sel)}
+    <div class="card"><h2>船隊動態 <small>${seasonOf(room.round)}季</small></h2><ul class="fleet">${Object.values(teams).filter((x) => Object.keys(x.members).length).map((x) => `<li><span class="flag" style="background:${teamColor(x.id)}"></span><b>${esc(x.name)}</b><span>${x.sea ? `航行中 → ${x.sea.to}（第 ${x.sea.arrive} 回合抵達）` : `停泊於${x.port}`}</span></li>`).join('')}</ul></div>
     </div></div>`;
 }
 function routeListHtml(room, port) {
@@ -495,7 +494,7 @@ function tabMarket() {
     ${restricted ? `<p class="small" style="color:var(--bad)">${t.port}本回合限制外商，本組不能交易。</p>` : ''}
     ${canTrade ? '' : '<p class="small muted">交易階段才能買賣，現在先看看行情。</p>'}
     ${basisSelect('basisTrade')}
-    ${GOODS.map((g) => { const q = U.draft.qty[g] || 1; return `<div class="trade-row"><div class="g"><b>${g}</b> ${pr[g]} 兩<small>船上 ${t.cargo[g] || 0} 箱</small></div>
+    ${GOODS.map((g) => { const q = U.draft.qty[g] || 1; return `<div class="trade-row"><div class="g">${goodIcon(g)}<b>${g}</b> ${pr[g]} 兩<small>船上 ${t.cargo[g] || 0} 箱</small></div>
       <div class="stepper"><button data-act="qty" data-g="${g}" data-d="-1" aria-label="減少">−</button><span>${q}</span><button data-act="qty" data-g="${g}" data-d="1" aria-label="增加">＋</button></div>
       <div class="row"><button class="btn sm primary" data-act="buy" data-g="${g}" ${canTrade && !restricted ? '' : 'disabled'}>買</button><button class="btn sm" data-act="sell" data-g="${g}" ${canTrade && !restricted && t.cargo[g] ? '' : 'disabled'}>賣</button></div></div>`; }).join('')}
     <p class="small muted">連續買同一種貨，每箱都比前一箱貴 1 兩；連續賣則每箱便宜 1 兩。</p>`;
@@ -578,15 +577,19 @@ function tabOrders() {
   const { room, teams, hand } = U.D;
   const tid = myTeamId(), t = teams[tid];
   const sent = hand?.order;
-  const d = U.draft.order || (U.draft.order = { dest: sent?.dest || '', bet: sent?.bet ? { ...sent.bet } : { port: '長崎', good: '生絲', dir: 'up', amt: 0 } });
+  if (!U.draft.order || (!U.draft.orderSynced && hand)) {
+    U.draft.order = { dest: sent?.dest || U.draft.order?.dest || '', bet: sent?.bet ? { ...sent.bet } : (U.draft.order?.bet || { port: '長崎', good: '生絲', dir: 'up', amt: 0 }) };
+    U.draft.orderSynced = !!hand;
+  }
+  const d = U.draft.order;
   const can = room.phase === 'orders' && room.status === 'playing';
   const dests = t.sea ? [] : PORTS.filter((p) => p !== t.port && L.routeBetween(t.port, p)).map((p) => ({ p, n: L.travelTime(t.port, p, room.round, room.flags || {}) }));
-  return `<div class="grid2"><div class="card"><h2>航向 <small>${seasonOf(room.round)}季・${t.sea ? '海上' : t.port}出發</small></h2>
+  return `${t.sea ? '' : `<div class="pick-hint small muted">在海圖上點港口，或在下方選擇下一站。</div>`}<div class="grid2 map-grid">${chartCard(room, teams, tid, { selectable: destHints(room, t), dest: d.dest || null, legend: false })}<div class="card"><h2>航向 <small>${seasonOf(room.round)}季・${t.sea ? '海上' : t.port}出發</small></h2>
     ${t.sea ? `<p>船正在海上前往${t.sea.to}，這回合不能改航向，但仍可以下注。</p>` : `<div class="dest">
       <label class="${!d.dest ? 'on' : ''}"><input type="radio" name="dest" value="" ${!d.dest ? 'checked' : ''}> 留在${t.port}</label>
       ${dests.map(({ p, n }) => `<label class="${d.dest === p ? 'on' : ''}" ${n == null ? 'style="opacity:.5"' : ''}><input type="radio" name="dest" value="${p}" ${d.dest === p ? 'checked' : ''} ${n == null ? 'disabled' : ''}> ${p}<span class="small muted">${n == null ? '這季無法出航' : n + ' 回合'}</span></label>`).join('')}
     </div>`}
-  </div><div class="card"><h2>預測下注 <small>猜中拿回 2 倍並 +1 聲望</small></h2>
+  </div></div><div class="grid2"><div class="card"><h2>預測下注 <small>猜中拿回 2 倍並 +1 聲望</small></h2>
     <p class="small muted">猜本回合結算的事件會讓哪個港口的哪種貨漲或跌。押 0 代表不下注。</p>
     <div class="row"><select id="betPort" style="width:auto">${PORTS.map((p) => `<option ${d.bet.port === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
       <select id="betGood" style="width:auto">${GOODS.map((g) => `<option ${d.bet.good === g ? 'selected' : ''}>${g}</option>`).join('')}</select>
@@ -634,6 +637,16 @@ function rulesHtml() {
 function shipIcon(s) {
   return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" aria-hidden="true"><path d="M7 20h18l-3.5 5h-11z" fill="#f4e9d3"/><path d="M16 5v14" stroke="#f4e9d3" stroke-width="1.6"/><path d="M16.8 6.5l7 11h-7z" fill="#f4e9d3"/><path d="M15.2 9l-5 8.5h5z" fill="#f4e9d3" opacity=".7"/></svg>`;
 }
+
+const GOOD_ICON = {
+  生絲: '<ellipse cx="12" cy="13" rx="7.5" ry="5.5" fill="#f3ead2" stroke="#b9a274"/><path d="M5 12q7 -4 14 1M5.5 15q7 -4 13 0M8 9q5 4 9 9" fill="none" stroke="#c8b07e" stroke-width="1"/>',
+  瓷器: '<path d="M9 4h6l-1 3q5 3 4 9q-1 4 -6 4q-5 0 -6 -4q-1 -6 4 -9z" fill="#f7f9fc" stroke="#3b5ba5"/><path d="M8 13q4 -3 8 0M8.5 16q3.5 2 7 0" fill="none" stroke="#3b5ba5" stroke-width="1.1"/>',
+  鹿皮: '<path d="M6 5q6 2 12 0l1 4q-2 3 0 6l-2 5q-5 -2 -10 0l-2 -5q2 -3 0 -6z" fill="#b8814a" stroke="#7a4f24"/><circle cx="10" cy="10" r=".9" fill="#f1dcc0"/><circle cx="14" cy="13" r=".9" fill="#f1dcc0"/><circle cx="11" cy="15" r=".8" fill="#f1dcc0"/>',
+  蔗糖: '<path d="M7 8q5 -4 10 0l1 11h-12z" fill="#e9d9b6" stroke="#9b7a44"/><path d="M8 8q4 2 8 0" fill="none" stroke="#9b7a44"/><path d="M9 13h6M9 16h6" stroke="#c7a76a" stroke-width="1"/>',
+  白銀: '<path d="M4 15l3 -6h10l3 6q-8 3 -16 0z" fill="#d6dbe1" stroke="#7b8794"/><ellipse cx="12" cy="9.5" rx="4.5" ry="1.4" fill="#eef1f4" stroke="#7b8794" stroke-width=".8"/>',
+  香料: '<path d="M5 17q7 -12 14 0z" fill="#b45309" stroke="#7c2d12"/><circle cx="9" cy="8" r="1.6" fill="#7c2d12"/><circle cx="13" cy="6.5" r="1.4" fill="#9a3412"/><circle cx="15.5" cy="9.5" r="1.3" fill="#7c2d12"/>',
+};
+function goodIcon(g) { return `<svg class="gico" viewBox="0 0 24 24" aria-hidden="true">${GOOD_ICON[g] || ''}</svg>`; }
 
 // ================= 事件處理 =================
 document.addEventListener('click', async (e) => {
@@ -721,6 +734,23 @@ document.addEventListener('click', async (e) => {
         d.bet.port = $('#betPort').value; d.bet.good = $('#betGood').value;
         await send('order', { dest: d.dest || null, bet: d.bet.amt > 0 ? d.bet : null, basis: $('#basisOrder')?.value || null });
         break;
+      }
+      case 'port': {
+        if (U.view === 'student' && U.tab === 'orders') {
+          const t = U.D.teams[myTeamId()], room = U.D.room;
+          if (!U.draft.order) tabOrders();
+          if (!t || t.sea) return toast('船在海上，不能改航向', true);
+          if (v === t.port) { U.draft.order.dest = ''; render(); return; }
+          if (!L.routeBetween(t.port, v)) return toast(`${t.port}沒有直達${v}的航線`, true);
+          if (L.travelTime(t.port, v, room.round, room.flags || {}) == null) return toast(`這個季節無法從${t.port}前往${v}`, true);
+          U.draft.order.dest = v; render(); return;
+        }
+        U.portSel = v; if (U.view === 'student' && U.tab !== 'map') U.tab = 'map'; render(); break;
+      }
+      case 'setDest': {
+        U.tab = 'orders';
+        if (!U.draft.order) tabOrders();
+        U.draft.order.dest = v; render(); window.scrollTo(0, 0); break;
       }
       case 'sendReview': await send('review', { text: $('#review').value }); break;
       default: break;
